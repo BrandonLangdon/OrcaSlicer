@@ -318,6 +318,8 @@ public:
 
     // Zero based index of an interface layer, used for alternating direction of interface / contact layers.
     size_t                      interface_id() const { return m_interface_id; }
+    // Orca: canopies of tree support printed on this layer.
+    const ExPolygons&           canopies() const { return canopy_areas; }
 
     void simplify_support_extrusion_path() { this->simplify_support_entity_collection(&support_fills); }
 
@@ -338,7 +340,8 @@ protected:
     ExPolygons                                roof_1st_layer; // the layer just below roof. When working with PolySupport, this layer should be printed with regular material
     ExPolygons                                floor_areas;
     ExPolygons                                roof_gap_areas; // the areas in the gap between support roof and overhang
-    enum AreaType { BaseType = 0, RoofType = 1, FloorType = 2, Roof1stLayer = 3 };
+    ExPolygons                                canopy_areas; // Orca: canopies under floating tips, printed as arc overhangs
+    enum AreaType { BaseType = 0, RoofType = 1, FloorType = 2, Roof1stLayer = 3, CanopyType = 4 };
     struct AreaGroup
     {
         ExPolygon *area;

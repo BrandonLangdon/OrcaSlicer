@@ -1630,7 +1630,9 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "tree_support_branch_angle"
             || opt_key == "tree_support_branch_angle_organic"
             || opt_key == "tree_support_angle_slow"
-            || opt_key == "tree_support_wall_count") {
+            || opt_key == "tree_support_wall_count"
+            || opt_key == "tree_support_canopy"
+            || opt_key == "tree_support_canopy_margin") {
             steps.emplace_back(posSupportMaterial);
         } else if (
                opt_key == "bottom_shell_layers"
@@ -1811,6 +1813,7 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "seam_slope_inner_walls"
             || opt_key == "support_speed"
             || opt_key == "support_interface_speed"
+            || opt_key == "support_canopy_speed"
             || opt_key == "overhang_1_4_speed"
             || opt_key == "overhang_2_4_speed"
             || opt_key == "overhang_3_4_speed"

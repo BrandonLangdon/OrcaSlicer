@@ -1327,6 +1327,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     // Spacing between interface lines (the hatching distance). Set zero to get a solid interface.
     ((ConfigOptionFloat,               support_interface_spacing))
     ((ConfigOptionFloatsNullable,      support_interface_speed))
+    ((ConfigOptionFloatsNullable,      support_canopy_speed))
     ((ConfigOptionEnum<SupportMaterialPattern>, support_base_pattern))
     ((ConfigOptionEnum<SupportMaterialInterfacePattern>, support_interface_pattern))
     // Spacing between support material lines (the hatching distance).
@@ -1378,6 +1379,8 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionInt,                tree_support_wall_count))
     ((ConfigOptionBool,               tree_support_auto_brim))
     ((ConfigOptionFloat,              tree_support_brim_width))
+    ((ConfigOptionBool,               tree_support_canopy))
+    ((ConfigOptionFloat,              tree_support_canopy_margin))
     ((ConfigOptionBool,               detect_narrow_internal_solid_infill))
     // ((ConfigOptionBool,               adaptive_layer_height))
     ((ConfigOptionFloat,              support_bottom_interface_spacing))
@@ -2153,6 +2156,7 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionBool,                gcode_comments))
     ((ConfigOptionInt,                 slow_down_layers))
     ((ConfigOptionInts,                support_material_interface_fan_speed))
+    ((ConfigOptionInts,                support_canopy_fan_speed))
     ((ConfigOptionInts,                internal_bridge_fan_speed)) // ORCA: Add support for separate internal bridge fan speed control
     ((ConfigOptionInts,                ironing_fan_speed))
     // Orca: notes for profiles from PrusaSlicer

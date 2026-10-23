@@ -3213,6 +3213,7 @@ void TabPrint::build()
         optgroup->append_single_option_line("ironing_speed", "speed_settings_other_layers_speed#ironing-speed");
         optgroup->append_single_option_line("support_speed", "speed_settings_other_layers_speed#support", 0);
         optgroup->append_single_option_line("support_interface_speed", "speed_settings_other_layers_speed#support-interface", 0);
+        optgroup->append_single_option_line("support_canopy_speed", "speed_settings_other_layers_speed#support-canopy", 0);
         optgroup->append_single_option_line("small_support_perimeter_speed", "speed_settings_other_layers_speed#small-tree-support-perimeters", 0);
         optgroup->append_single_option_line("small_support_perimeter_threshold", "speed_settings_other_layers_speed#small-tree-support-perimeters-threshold", 0);
         optgroup = page->new_optgroup(L("Overhang speed"), L"param_overhang_speed", 15);
@@ -3334,6 +3335,8 @@ void TabPrint::build()
         optgroup->append_single_option_line("tree_support_angle_slow", "support_settings_tree#preferred-branch-angle");
         optgroup->append_single_option_line("tree_support_auto_brim", "support_settings_tree#auto-brim-width");
         optgroup->append_single_option_line("tree_support_brim_width", "support_settings_tree#tree-support-brim-width");
+        optgroup->append_single_option_line("tree_support_canopy", "support_settings_tree#canopy-for-floating-tips");
+        optgroup->append_single_option_line("tree_support_canopy_margin", "support_settings_tree#canopy-margin");
 
     page = add_options_page(L("Multimaterial"), "custom-gcode_multi_material"); // ORCA: icon only visible on placeholders
         optgroup = page->new_optgroup(L("Prime tower"), L"param_tower");
@@ -4924,6 +4927,7 @@ void TabFilament::build()
         optgroup->append_single_option_line("overhang_fan_speed", "material_cooling#overhangs-and-external-bridges-fan-speed");
         optgroup->append_single_option_line("internal_bridge_fan_speed", "material_cooling#internal-bridges-fan-speed"); // ORCA: Add support for separate internal bridge fan speed control
         optgroup->append_single_option_line("support_material_interface_fan_speed", "material_cooling#support-interface-fan-speed");
+        optgroup->append_single_option_line("support_canopy_fan_speed", "material_cooling#support-canopy-fan-speed");
         optgroup->append_single_option_line("ironing_fan_speed", "material_cooling#ironing-fan-speed"); // ORCA: Add support for ironing fan speed control
 
         optgroup = page->new_optgroup(L("Auxiliary part cooling fan"), L"param_cooling_aux_fan");

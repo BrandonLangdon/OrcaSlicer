@@ -405,6 +405,7 @@ static std::string to_string(libvgcode::EGCodeExtrusionRole role)
     case libvgcode::EGCodeExtrusionRole::InternalBridgeInfill:     { return _u8L("Internal bridge"); } // ORCA
     case libvgcode::EGCodeExtrusionRole::Brim:                     { return _u8L("Brim"); }
     case libvgcode::EGCodeExtrusionRole::SupportTransition:        { return _u8L("Support transition"); }
+    case libvgcode::EGCodeExtrusionRole::SupportCanopy:            { return _u8L("Support canopy"); }
     case libvgcode::EGCodeExtrusionRole::Mixed:                    { return _u8L("Mixed"); }
     default:                                                       { return _u8L("Unknown"); }
     }
@@ -1513,8 +1514,7 @@ void GCodeViewer::load_as_gcode(const GCodeProcessorResult& gcode_result, const 
         // back-transformed g-code off the mesh — but only when those features are present. That
         // is the "g-code shifts vs mesh as soon as supports are enabled" bug. Filter them out.
         auto is_object_body = [](ExtrusionRole r) {
-            return r != erSupportMaterial && r != erSupportMaterialInterface
-                && r != erSupportTransition
+            return !is_support(r)
                 && r != erSkirt && r != erBrim && r != erWipeTower;
         };
         auto accumulate = [&](bool body_only) {
@@ -1707,7 +1707,7 @@ void GCodeViewer::load_as_gcode(const GCodeProcessorResult& gcode_result, const 
             libvgcode::EGCodeExtrusionRole::WipeTower,
             // ORCA
             libvgcode::EGCodeExtrusionRole::BottomSurface, libvgcode::EGCodeExtrusionRole::InternalBridgeInfill, libvgcode::EGCodeExtrusionRole::Brim,
-            libvgcode::EGCodeExtrusionRole::SupportTransition, libvgcode::EGCodeExtrusionRole::Mixed
+            libvgcode::EGCodeExtrusionRole::SupportTransition, libvgcode::EGCodeExtrusionRole::SupportCanopy, libvgcode::EGCodeExtrusionRole::Mixed
             });
     m_paths_bounding_box = BoundingBoxf3(libvgcode::convert(bbox[0]).cast<double>(), libvgcode::convert(bbox[1]).cast<double>());
     m_max_bounding_box = m_paths_bounding_box;

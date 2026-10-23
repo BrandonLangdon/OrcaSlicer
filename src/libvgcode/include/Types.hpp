@@ -155,6 +155,7 @@ enum class EGCodeExtrusionRole : uint8_t
       InternalBridgeInfill,
       Brim,
       SupportTransition,
+      SupportCanopy,
       Mixed,
     COUNT
 };

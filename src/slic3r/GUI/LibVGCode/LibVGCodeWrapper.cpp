@@ -103,6 +103,7 @@ Slic3r::ExtrusionRole convert(EGCodeExtrusionRole role)
     case EGCodeExtrusionRole::InternalBridgeInfill:     { return Slic3r::ExtrusionRole::erInternalBridgeInfill; }
     case EGCodeExtrusionRole::Brim:                     { return Slic3r::ExtrusionRole::erBrim; }
     case EGCodeExtrusionRole::SupportTransition:        { return Slic3r::ExtrusionRole::erSupportTransition; }
+    case EGCodeExtrusionRole::SupportCanopy:            { return Slic3r::ExtrusionRole::erSupportCanopy; }
     case EGCodeExtrusionRole::Mixed:                    { return Slic3r::ExtrusionRole::erMixed; }
     default:                                            { return Slic3r::ExtrusionRole::erNone; }
     }
@@ -132,6 +133,7 @@ EGCodeExtrusionRole convert(Slic3r::ExtrusionRole role)
     case Slic3r::ExtrusionRole::erInternalBridgeInfill:        { return EGCodeExtrusionRole::InternalBridgeInfill; }
     case Slic3r::ExtrusionRole::erBrim:                        { return EGCodeExtrusionRole::Brim; }
     case Slic3r::ExtrusionRole::erSupportTransition:           { return EGCodeExtrusionRole::SupportTransition; }
+    case Slic3r::ExtrusionRole::erSupportCanopy:               { return EGCodeExtrusionRole::SupportCanopy; }
     case Slic3r::ExtrusionRole::erMixed:                       { return EGCodeExtrusionRole::Mixed; }
     default:                                                   { return EGCodeExtrusionRole::None; }
     }

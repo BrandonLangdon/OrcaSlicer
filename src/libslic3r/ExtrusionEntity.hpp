@@ -43,6 +43,8 @@ enum ExtrusionRole : uint8_t {
     erSupportTransition,
     erWipeTower,
     erCustom,
+    // Orca: canopy of tree support, printed as arc overhangs. Placed after the existing roles to keep their values.
+    erSupportCanopy,
     // Extrusion role for a collection with multiple extrusion roles.
     erMixed,
     erCount
@@ -114,7 +116,15 @@ inline bool is_support(ExtrusionRole role)
 {
     return role == erSupportMaterial
         || role == erSupportMaterialInterface
-        || role == erSupportTransition;
+        || role == erSupportTransition
+        || role == erSupportCanopy;
+}
+
+// Orca: support printed with the support interface filament.
+inline bool is_support_interface(ExtrusionRole role)
+{
+    return role == erSupportMaterialInterface
+        || role == erSupportCanopy;
 }
 
 class ExtrusionEntity

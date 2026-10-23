@@ -103,6 +103,7 @@ struct SupportNode
                 parents.push_back(neighbor);
             }
             is_sharp_tail = parent->is_sharp_tail;
+            is_canopy = parent->is_canopy;
             skin_direction = parent->skin_direction;
         }
     }
@@ -136,6 +137,9 @@ struct SupportNode
     bool           is_corner       = false;
     bool           is_processed    = false;
     bool           is_sharp_tail   = false;
+    // Orca: the node carries a canopy, whose outline is kept in `overhang`; printed in place of the node's circle
+    // on the layer right below the gap to the object.
+    bool           is_canopy       = false;
     bool           valid = true;
     ExPolygon      overhang; // when type==ePolygon, set this value to get original overhang area
 

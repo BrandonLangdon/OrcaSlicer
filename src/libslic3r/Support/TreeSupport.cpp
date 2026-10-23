@@ -28,6 +28,7 @@
 #include "libslic3r/Utils.hpp"
 #include "format.hpp"
 #include "ClipperUtils.hpp"
+#include "Fill/ArcOverhang.hpp"
 #include "Fill/FillBase.hpp"
 #include "I18N.hpp"
 #include "Layer.hpp"
@@ -1700,6 +1701,38 @@ void TreeSupport::generate_toolpaths()
                     filler_Roof1stLayer->fixed_angle = false;
                     filler_Roof1stLayer->layer_id = size_t(-1);
                     filler_interface->angle = m_support_params.support_interface_angle(area_group.interface_id);
+                    if (area_group.type == SupportLayer::CanopyType) {
+                        // Orca: the trunk below anchors the canopy. The part of the canopy right above the support below is
+                        // filled solid, the rest with arcs grown out of that part.
+                        const SupportLayer *lower = layer_id > 0 ? m_object->get_support_layer(layer_id - 1) : nullptr;
+                        ExPolygons          below;
+                        if (lower)
+                            for (const ExPolygons *areas : { &lower->base_areas, &lower->roof_areas, &lower->roof_1st_layer, &lower->floor_areas, &lower->canopy_areas })
+                                append(below, *areas);
+                        const ExPolygons anchors = intersection_ex(ExPolygons{ poly }, below);
+
+                        auto canopy_fills     = std::make_unique<ExtrusionEntityCollection>();
+                        // Each arc only holds once the arcs it rests on are printed.
+                        canopy_fills->no_sort = true;
+                        filler_Roof1stLayer->spacing = interface_flow.spacing();
+                        fill_params.density          = 1.;
+                        fill_params.dont_adjust      = true;
+                        ArcOverhangParams arc_params;
+                        arc_params.line_spacing = interface_flow.scaled_spacing();
+                        Polylines arcs          = generate_arc_overhangs(ExPolygons{ poly }, anchors, arc_params);
+                        // Without anything below to grow from, the canopy is printed as a plain interface. Otherwise the part
+                        // over the trunk goes with the arcs, so that the whole canopy shares their speed and cooling.
+                        ExPolygons          solid       = arcs.empty() ? ExPolygons{ poly } : anchors;
+                        const ExtrusionRole canopy_role = arcs.empty() ? erSupportMaterialInterface : erSupportCanopy;
+                        fill_expolygons_generate_paths(canopy_fills->entities, solid, filler_Roof1stLayer.get(), fill_params,
+                                                       canopy_role, interface_flow);
+                        extrusion_entities_append_paths(canopy_fills->entities, std::move(arcs), erSupportCanopy,
+                                                        float(interface_flow.mm3_per_mm()), float(interface_flow.width()),
+                                                        float(interface_flow.height()));
+                        if (!canopy_fills->empty())
+                            ts_layer->support_fills.entities.push_back(canopy_fills.release());
+                        continue;
+                    }
                     if (area_group.type != SupportLayer::BaseType) {
                         // interface
                         if (layer_id == 0 && !belt_floor_active) {
@@ -2227,6 +2260,7 @@ void TreeSupport::draw_circles()
                 ExPolygons& roof_1st_layer = ts_layer->roof_1st_layer;
                 ExPolygons& floor_areas = ts_layer->floor_areas;
                 ExPolygons& roof_gap_areas = ts_layer->roof_gap_areas;
+                ExPolygons& canopy_areas = ts_layer->canopy_areas;
                 coordf_t         max_layers_above_base = 0;
                 coordf_t         max_layers_above_roof = 0;
                 coordf_t         max_layers_above_roof1 = 0;
@@ -2265,6 +2299,11 @@ void TreeSupport::draw_circles()
                         break;
 
                     const SupportNode& node = *p_node;
+                    // Orca: the layer right below the gap to the object prints the canopy in place of the node's circle.
+                    if (node.is_canopy && node.distance_to_top == 0) {
+                        append(canopy_areas, diff_clipped(ExPolygons{ node.overhang }, get_collision(false)));
+                        continue;
+                    }
                     ExPolygons area;
                     // Generate directly from overhang polygon if one of the following is true:
                     // 1) node is a normal part of hybrid support
@@ -2370,7 +2409,13 @@ void TreeSupport::draw_circles()
                 roof_1st_layer = diff_ex(roof_1st_layer, ClipperUtils::clip_clipper_polygons_with_subject_bbox(roof_areas,get_extents(roof_1st_layer)));
                 roof_1st_layer = intersection_ex(roof_1st_layer, m_machine_border);
 
-                ExPolygons roofs; append(roofs, roof_1st_layer); append(roofs, roof_areas);append(roofs, roof_gap_areas);
+                canopy_areas = intersection_ex(union_ex(canopy_areas), m_machine_border);
+                // Orca: canopies take precedence over the roofs they overlap; the arcs need the whole canopy to fan out in.
+                if (!canopy_areas.empty()) {
+                    roof_areas     = diff_ex(roof_areas, canopy_areas);
+                    roof_1st_layer = diff_ex(roof_1st_layer, canopy_areas);
+                }
+                ExPolygons roofs; append(roofs, roof_1st_layer); append(roofs, roof_areas);append(roofs, roof_gap_areas);append(roofs, canopy_areas);
                 base_areas = diff_ex(base_areas, ClipperUtils::clip_clipper_polygons_with_subject_bbox(roofs, get_extents(base_areas)));
                 base_areas = intersection_ex(base_areas, m_machine_border);
 
@@ -2394,6 +2439,7 @@ void TreeSupport::draw_circles()
                         roof_1st_layer = diff_ex(roof_1st_layer, belt_surface);
                         floor_areas    = diff_ex(floor_areas,    belt_surface);
                         roof_gap_areas = diff_ex(roof_gap_areas, belt_surface);
+                        canopy_areas   = diff_ex(canopy_areas,   belt_surface);
                     }
                 }
 
@@ -2584,6 +2630,8 @@ void TreeSupport::draw_circles()
                     area_groups.emplace_back(&expoly, SupportLayer::Roof1stLayer, max_layers_above_roof1);
                     area_groups.back().interface_as_base = top_base_interface_layers > 0;
                 }
+                for (auto &expoly : ts_layer->canopy_areas)
+                    area_groups.emplace_back(&expoly, SupportLayer::CanopyType, 0);
 
                 for (auto &area_group : area_groups) {
                     auto& expoly = area_group.area;
@@ -3664,6 +3712,8 @@ void TreeSupport::generate_contact_points()
     coord_t    radius_scaled         = scale_(base_radius);
     bool       on_buildplate_only    = m_object_config->support_on_build_plate_only.value;
     const bool has_belt_floor = std::abs(m_slicing_params.belt_floor_shear_factor) > EPSILON;
+    const bool     canopy_enabled = config.tree_support_canopy.value;
+    const float    canopy_margin  = float(scale_(config.tree_support_canopy_margin.value));
 
     //First generate grid points to cover the entire area of the print.
     BoundingBox bounding_box = m_object->bounding_box();
@@ -3808,6 +3858,22 @@ void TreeSupport::generate_contact_points()
                     bool add_interface = area(overhang) > minimum_roof_area && !is_sharp_tail;
                     BoundingBox overhang_bounds = get_extents(overhang);
                     double      radius          = std::clamp(unscale_(overhang_bounds.radius()), MIN_BRANCH_RADIUS, base_radius);
+
+                    // Orca: a sharp tail with nothing at all below it is where a floating tip starts. With canopies on, the
+                    // tip gets a single trunk carrying a flat canopy instead of a cluster of branch tips along its outline.
+                    // The tip is listed both as a sharp tail and as a regular overhang; only the sharp tail adds the canopy.
+                    if (canopy_enabled && (layer->lower_layer == nullptr || !overlaps({ overhang }, layer->lower_layer->lslices)) &&
+                        overlaps({ overhang }, layer->sharp_tails)) {
+                        if (is_sharp_tail)
+                            for (const ExPolygon &canopy : offset_ex(overhang, canopy_margin, jtRound, scale_(0.01))) {
+                                if (SupportNode *contact_node = insert_point(overhang_bounds.center(), canopy, radius, true, false)) {
+                                    contact_node->is_canopy     = true;
+                                    // The canopy keeps the regular gap to the object and is not pulled along the tip's skin.
+                                    contact_node->is_sharp_tail = false;
+                                }
+                            }
+                        continue;
+                    }
                     // add supports at corners for both auto and manual overhangs, github #2008
                     auto &points = overhang.contour.points;
                     int   nSize = points.size();

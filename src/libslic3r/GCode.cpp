@@ -6329,7 +6329,7 @@ void GCode::compute_farthest_point(const std::vector<LayerToPrint> &layers, int 
         return role == erInternalInfill || role == erSolidInfill || role == erTopSolidInfill;
     };
     auto is_candidate_support_role = [](ExtrusionRole role) -> bool {
-        return role == erSupportMaterial || role == erSupportMaterialInterface || role == erSupportTransition;
+        return is_support(role);
     };
 
     // Update a (max_dist_sq, point, extruder_id) triple
@@ -6972,7 +6972,7 @@ LayerResult GCode::process_layer(
             if (! support_layer.support_fills.entities.empty()) {
                 ExtrusionRole   role               = support_layer.support_fills.role();
                 bool            has_support        = role == erMixed || role == erSupportMaterial || role == erSupportTransition;
-                bool            has_interface      = role == erMixed || role == erSupportMaterialInterface;
+                bool            has_interface      = role == erMixed || is_support_interface(role);
                 // Extruder ID of the support base. -1 if "don't care".
                 unsigned int    support_extruder   = object.config().support_filament.value - 1;
                 // Shall the support be printed with the active extruder, preferably with non-soluble, to avoid tool changes?
@@ -7065,6 +7065,7 @@ LayerResult GCode::process_layer(
                 if (has_interface) {
                     support_filaments[{ &support_layer, erSupportMaterialInterface }] =
                         single_extruder ? (has_support ? support_extruder : interface_extruder) : interface_extruder;
+                    support_filaments[{ &support_layer, erSupportCanopy }] = support_filaments[{ &support_layer, erSupportMaterialInterface }];
                 }
                 // Assign an extruder to the base.
                 ObjectByExtruder &obj = object_by_extruder(by_extruder, has_support ? support_extruder : interface_extruder, &layer_to_print - layers.data(), layers.size());
@@ -8967,11 +8968,13 @@ std::string GCode::extrude_support(const ExtrusionEntityCollection &support_fill
     static constexpr const char* support_label            = "support material";
     static constexpr const char* support_interface_label  = "support material interface";
     static constexpr const char* support_transition_label = "support transition";
+    static constexpr const char* support_canopy_label     = "support canopy";
     static constexpr const char* support_ironing_label    = "support ironing";
 
     // Not static: it captures `this` by reference.
     const auto speed_for_path = [&](double length, ExtrusionRole role, double default_speed = -1.0) {
-        if (!is_support(role) || length > SMALL_PERIMETER_LENGTH(NOZZLE_CONFIG(small_support_perimeter_threshold)))
+        // Orca: canopy arcs keep their own slow speed however short they are.
+        if (!is_support(role) || role == erSupportCanopy || length > SMALL_PERIMETER_LENGTH(NOZZLE_CONFIG(small_support_perimeter_threshold)))
             return default_speed;
 
         double small_perimeter_speed = -1.0;
@@ -8994,7 +8997,9 @@ std::string GCode::extrude_support(const ExtrusionEntityCollection &support_fill
         extrusions.reserve(support_fills.entities.size());
         for (const ExtrusionEntity* ee : support_fills.entities) {
             const auto role = ee->role();
-            if ((role == support_extrusion_role) || (support_extrusion_role == erMixed && role != erIroning)) {
+            // Orca: the canopy is printed together with the support interface.
+            if ((role == support_extrusion_role) || (support_extrusion_role == erMixed && role != erIroning) ||
+                (support_extrusion_role == erSupportMaterialInterface && role == erSupportCanopy)) {
                 extrusions.emplace_back(ee);
             }
         }
@@ -9012,7 +9017,8 @@ std::string GCode::extrude_support(const ExtrusionEntityCollection &support_fill
 
             const char* label = (role == erSupportMaterial) ? support_label :
                 ((role == erSupportMaterialInterface) ? support_interface_label : 
-                ((role == erIroning) ? support_ironing_label : support_transition_label));
+                ((role == erIroning) ? support_ironing_label :
+                ((role == erSupportCanopy) ? support_canopy_label : support_transition_label)));
 
             const ExtrusionPath* path = dynamic_cast<const ExtrusionPath*>(ee);
             const ExtrusionMultiPath* multipath = dynamic_cast<const ExtrusionMultiPath*>(ee);
@@ -9350,7 +9356,7 @@ std::string GCode::_extrude(const ExtrusionPath &path, const std::string &path_d
             _mm3_per_mm *= m_config.gap_fill_flow_ratio;
         } else if (path.role() == erSupportMaterial) { // Should this condition also cover erSupportTransition?
             _mm3_per_mm *= m_config.support_flow_ratio;
-        } else if (path.role() == erSupportMaterialInterface) {
+        } else if (is_support_interface(path.role())) {
             _mm3_per_mm *= m_config.support_interface_flow_ratio;
         }
 
@@ -9409,6 +9415,8 @@ std::string GCode::_extrude(const ExtrusionPath &path, const std::string &path_d
             speed = NOZZLE_CONFIG(support_speed);
         } else if (path.role() == erSupportMaterialInterface) {
             speed = NOZZLE_CONFIG(support_interface_speed);
+        } else if (path.role() == erSupportCanopy) {
+            speed = NOZZLE_CONFIG(support_canopy_speed);
         } else {
             throw Slic3r::InvalidArgument("Invalid speed");
         }
@@ -9801,10 +9809,13 @@ std::string GCode::_extrude(const ExtrusionPath &path, const std::string &path_d
     auto apply_role_based_fan_speed = [
         &path, &append_role_based_fan_marker,
         supp_interface_fan_speed = FILAMENT_CONFIG(support_material_interface_fan_speed),
+        supp_canopy_fan_speed    = FILAMENT_CONFIG(support_canopy_fan_speed),
         ironing_fan_speed        = FILAMENT_CONFIG(ironing_fan_speed)
     ] {
         append_role_based_fan_marker(erSupportMaterialInterface, "_SUPP_INTERFACE"sv,
                                      supp_interface_fan_speed >= 0 && path.role() == erSupportMaterialInterface);
+        append_role_based_fan_marker(erSupportCanopy, "_SUPP_CANOPY"sv,
+                                     supp_canopy_fan_speed >= 0 && path.role() == erSupportCanopy);
         append_role_based_fan_marker(erIroning, "_IRONING"sv,
                                      ironing_fan_speed >= 0 && path.role() == erIroning);
     };
@@ -10194,6 +10205,7 @@ std::string GCode::extrusion_role_to_string_for_parser(const ExtrusionRole & rol
         case erSupportMaterial: return "SupportMaterial";
         case erSupportMaterialInterface: return "SupportMaterialInterface";
         case erSupportTransition: return "SupportTransition";
+        case erSupportCanopy: return "SupportCanopy";
         case erWipeTower: return "WipeTower";
         case erCustom:
         case erMixed:

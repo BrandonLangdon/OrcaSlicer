@@ -1061,8 +1061,9 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     // hide settings that are not used by tree supports
     toggle_line("support_threshold_overlap", !support_is_tree); // ORCA: tree supports do not use Threshold Overlap
     // settings specific to normal trees
-    for (auto el : {"tree_support_branch_angle", "tree_support_branch_distance", "tree_support_branch_diameter", "tree_support_auto_brim", "tree_support_brim_width"})
+    for (auto el : {"tree_support_branch_angle", "tree_support_branch_distance", "tree_support_branch_diameter", "tree_support_auto_brim", "tree_support_brim_width", "tree_support_canopy", "tree_support_canopy_margin"})
         toggle_line(el, support_is_normal_tree);
+    toggle_field("tree_support_canopy_margin", support_is_normal_tree && config->opt_bool("tree_support_canopy"));
     // settings specific to organic trees
     for (auto el : {"tree_support_branch_angle_organic", "tree_support_branch_distance_organic", "tree_support_branch_diameter_organic", "tree_support_angle_slow", "tree_support_tip_diameter", "tree_support_top_rate", "tree_support_branch_diameter_angle"})
         toggle_line(el, support_is_organic);

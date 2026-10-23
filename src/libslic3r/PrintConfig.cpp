@@ -4150,7 +4150,20 @@ void PrintConfigDef::init_fff_params()
     def->max = 100;
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionInts{ -1 });
-    
+
+    // Orca: canopy supports
+    def = this->add("support_canopy_fan_speed", coInts);
+    def->label = L("Support canopy fan speed");
+    def->tooltip = L("This part cooling fan speed is applied when printing the canopies of tree support. Their arcs span open air, "
+                     "so they need strong cooling to set before they sag."
+                     "\nSet to -1 to disable it."
+                     "\nThis setting is overridden by disable_fan_first_layers.");
+    def->sidetext = "%";
+    def->min = -1;
+    def->max = 100;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionInts{ 100 });
+
     // ORCA: Add support for separate internal bridge fan speed control
     def = this->add("internal_bridge_fan_speed", coInts);
     def->label = L("Internal bridges fan speed");
@@ -7512,6 +7525,18 @@ void PrintConfigDef::init_fff_params()
     def->nullable = true;
     def->set_default_value(new ConfigOptionFloatsNullable{80});
 
+    // Orca: canopy supports
+    def = this->add("support_canopy_speed", coFloats);
+    def->label = L("Support canopy");
+    def->category = L("Speed");
+    def->tooltip = L("This is the speed for the canopies of tree support. Their arcs span open air and only hold "
+                     "if each one cools before the next is laid against it, so they need to be printed very slowly.");
+    def->sidetext = L("mm/s");	// millimeters per second, CIS languages need translation
+    def->min = 1;
+    def->mode = comAdvanced;
+    def->nullable = true;
+    def->set_default_value(new ConfigOptionFloatsNullable{5});
+
     def = this->add("support_base_pattern", coEnum);
     def->label = L("Base pattern");
     def->category = L("Support");
@@ -7942,6 +7967,26 @@ void PrintConfigDef::init_fff_params()
     def->tooltip = L("This setting specifies whether to add infill inside large hollows of tree support.");
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionBool(false));
+
+    // Orca: canopy supports
+    def = this->add("tree_support_canopy", coBool);
+    def->label = L("Canopy for floating tips");
+    def->category = L("Support");
+    def->tooltip = L("Support regions that start in mid-air, such as downward pointing spikes or the tip of an upside-down "
+                     "pyramid, with a flat canopy on a single trunk instead of a cluster of branches. The canopy is printed "
+                     "as arcs grown out from the top of the trunk, so it can be much wider than the trunk itself.");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionBool(false));
+
+    def = this->add("tree_support_canopy_margin", coFloat);
+    def->label = L("Canopy margin");
+    def->category = L("Support");
+    def->tooltip = L("How far the canopy reaches beyond the outline of the floating tip it supports.");
+    def->sidetext = L("mm");	// millimeters, CIS languages need translation
+    def->min = 0;
+    def->max = 20;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(2.));
     
     def = this->add("support_ironing", coBool);
     def->label = L("Ironing Support Interface");
@@ -10081,6 +10126,7 @@ std::set<std::string> print_options_with_variant = {
     "gap_infill_speed",
     "support_speed",
     "support_interface_speed",
+    "support_canopy_speed",
     "travel_speed",
     "travel_speed_z",
     "initial_layer_travel_speed",
@@ -13743,14 +13789,14 @@ CustomGcodeSpecificConfigDef::CustomGcodeSpecificConfigDef()
     // TRN The quoted values are G-code identifiers; keep them in English.
     def->tooltip = L("The new extrusion role/type that is going to be used\nPossible values:\n[\"Perimeter\", \"ExternalPerimeter\", "
                      "\"OverhangPerimeter\", \"InternalInfill\", \"SolidInfill\", \"TopSolidInfill\", \"BottomSurface\", \"BridgeInfill\", \"GapFill\", \"Ironing\", "
-                     "\"Skirt\", \"Brim\", \"SupportMaterial\", \"SupportMaterialInterface\", \"SupportTransition\", \"WipeTower\", \"Mixed\"]");
+                     "\"Skirt\", \"Brim\", \"SupportMaterial\", \"SupportMaterialInterface\", \"SupportTransition\", \"SupportCanopy\", \"WipeTower\", \"Mixed\"]");
 
     def = this->add("last_extrusion_role", coString);
     def->label = L("Last extrusion role");
     // TRN The quoted values are G-code identifiers; keep them in English.
     def->tooltip = L("The previously used extrusion role/type\nPossible values:\n[\"Perimeter\", \"ExternalPerimeter\", "
                      "\"OverhangPerimeter\", \"InternalInfill\", \"SolidInfill\", \"TopSolidInfill\", \"BottomSurface\", \"BridgeInfill\", \"GapFill\", \"Ironing\", "
-                     "\"Skirt\", \"Brim\", \"SupportMaterial\", \"SupportMaterialInterface\", \"SupportTransition\", \"WipeTower\", \"Mixed\"]");
+                     "\"Skirt\", \"Brim\", \"SupportMaterial\", \"SupportMaterialInterface\", \"SupportTransition\", \"SupportCanopy\", \"WipeTower\", \"Mixed\"]");
 }
 
 const CustomGcodeSpecificConfigDef custom_gcode_specific_config_def;

@@ -2,6 +2,11 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <sstream>
+#include <string>
+#include <iterator>
+#include <utility>
+#include <vector>
 #include "libslic3r/Config.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/Point.hpp"
@@ -14,7 +19,10 @@
 #include "libslic3r/TriangleMesh.hpp"
 
 #include "test_helpers.hpp"
+#include "libslic3r/ClipperUtils.hpp"
+#include "libslic3r/ExPolygon.hpp"
 #include "libslic3r/ExtrusionEntityCollection.hpp"
+#include "libslic3r/Model.hpp"
 #include "libslic3r/Print.hpp"
 
 using namespace Slic3r::Test;
@@ -38,6 +46,32 @@ TriangleMesh two_tier_mesh()
     return mesh;
 }
 
+// A downward pointing cone hangs from a plate held up by a column, so its tip floats 10 mm above the bed.
+constexpr float floating_tip_z = 10.f;
+TriangleMesh hanging_cone_mesh()
+{
+    TriangleMesh column = make_cube(6, 6, 31);
+    TriangleMesh plate  = make_cube(30, 16, 3);
+    TriangleMesh cone   = make_cone(8, 30.5 - floating_tip_z);
+    plate.translate(0.f, -5.f, 30.f);
+    cone.mirror_z();
+    cone.translate(20.f, 3.f, 30.5f);
+    TriangleMesh mesh = column;
+    mesh.merge(plate);
+    mesh.merge(cone);
+    return mesh;
+}
+
+// Support layers below the floating tip that carry a canopy.
+std::vector<const SupportLayer *> canopy_layers(const Slic3r::Print &print)
+{
+    std::vector<const SupportLayer *> layers;
+    for (const SupportLayer *layer : print.objects().front()->support_layers())
+        if (!layer->canopies().empty())
+            layers.push_back(layer);
+    return layers;
+}
+
 TriangleMesh scaled(TestMesh id, float scale)
 {
     TriangleMesh mesh = Slic3r::Test::mesh(id);
@@ -46,9 +80,8 @@ TriangleMesh scaled(TestMesh id, float scale)
 }
 
 // `extra` is applied last, so a caller can add or override any key.
-void slice_with_tree_support(const TriangleMesh &mesh, Slic3r::Print &print, const char *style,
-                             int threshold_angle = 30, int build_plate_only = 0, int raft_layers = 0,
-                             std::initializer_list<Slic3r::ConfigBase::SetDeserializeItem> extra = {})
+DynamicPrintConfig tree_support_config(const char *style, int threshold_angle = 30, int build_plate_only = 0, int raft_layers = 0,
+                                       std::initializer_list<Slic3r::ConfigBase::SetDeserializeItem> extra = {})
 {
     DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
     config.set_deserialize_strict({
@@ -61,7 +94,27 @@ void slice_with_tree_support(const TriangleMesh &mesh, Slic3r::Print &print, con
         { "layer_height",                0.2 },
     });
     config.set_deserialize_strict(extra);
-    Slic3r::Test::init_and_process_print({ mesh }, print, config);
+    return config;
+}
+
+void slice_with_tree_support(const TriangleMesh &mesh, Slic3r::Print &print, const char *style,
+                             int threshold_angle = 30, int build_plate_only = 0, int raft_layers = 0,
+                             std::initializer_list<Slic3r::ConfigBase::SetDeserializeItem> extra = {})
+{
+    Slic3r::Test::init_and_process_print({ mesh }, print, tree_support_config(style, threshold_angle, build_plate_only, raft_layers, extra));
+}
+
+// Slices the hanging cone in the middle of the bed. Arranging centres an object on the origin, where tree support
+// is clipped to the part of it that lies on the bed.
+void slice_hanging_cone(Slic3r::Print &print, std::initializer_list<Slic3r::ConfigBase::SetDeserializeItem> extra = {})
+{
+    TriangleMesh mesh = hanging_cone_mesh();
+    mesh.translate(100.f, 100.f, 0.f);
+    std::vector<TriangleMesh> meshes;
+    meshes.push_back(std::move(mesh));
+    Slic3r::Model model;
+    Slic3r::Test::init_print(std::move(meshes), print, model, tree_support_config("tree_slim", 30, 0, 0, extra), nullptr, /*arrange=*/false);
+    print.process();
 }
 
 Points support_points(const Slic3r::Print &print)
@@ -197,4 +250,92 @@ TEST_CASE("Tree support toolpaths do not depend on the MST tie order", "[TreeSup
         { "tree_support_branch_angle",    40 },
         { "support_line_width",           0.4 },
     });
+}
+
+TEST_CASE("A floating tip gets a canopy right below it when canopies are on", "[TreeSupport][Canopy]")
+{
+    constexpr double margin = 2.;
+    Slic3r::Print    print;
+    slice_hanging_cone(print, {
+        { "tree_support_canopy",        1 },
+        { "tree_support_canopy_margin", margin },
+    });
+
+    const std::vector<const SupportLayer *> layers = canopy_layers(print);
+    REQUIRE(layers.size() == 1);
+    const SupportLayer &canopy = *layers.front();
+    // One gap of support_top_z_distance below the tip, give or take a layer.
+    CHECK(canopy.print_z < floating_tip_z);
+    CHECK(canopy.print_z > floating_tip_z - 3 * 0.2);
+    // The canopy reaches the margin beyond the tip all around, so it spans at least the margin's disc.
+    double canopy_area = 0.;
+    for (const ExPolygon &expoly : canopy.canopies())
+        canopy_area += unscaled(unscaled(expoly.area()));
+    CHECK(canopy_area > 0.9 * PI * margin * margin);
+    CHECK_FALSE(canopy.support_fills.empty());
+
+    // The canopy stands on a single trunk rather than on a cluster of branches. Support of the plate around the cone
+    // may pass under the canopy too, so only what lies within the canopy counts as standing on it.
+    const auto &support_layers = print.objects().front()->support_layers();
+    const auto  it             = std::find(support_layers.begin(), support_layers.end(), &canopy);
+    REQUIRE(it != support_layers.begin());
+    size_t trunks = 0;
+    for (const ExPolygon &island : (*std::prev(it))->base_areas)
+        if (diff_ex(ExPolygons{ island }, canopy.canopies()).empty())
+            ++trunks;
+    CHECK(trunks == 1);
+}
+
+TEST_CASE("No canopy is generated while canopies are off", "[TreeSupport][Canopy]")
+{
+    Slic3r::Print print;
+    slice_hanging_cone(print);
+
+    REQUIRE_FALSE(support_points(print).empty());
+    CHECK(canopy_layers(print).empty());
+}
+
+TEST_CASE("A canopy prints at its own speed and fan speed", "[TreeSupport][Canopy]")
+{
+    constexpr double canopy_speed = 4.;
+    constexpr int    canopy_fan   = 90;
+    Slic3r::Print    print;
+    slice_hanging_cone(print, {
+        { "tree_support_canopy",      1 },
+        { "support_canopy_speed",     canopy_speed },
+        { "support_canopy_fan_speed", canopy_fan },
+    });
+    const std::string gcode = Slic3r::Test::gcode(print);
+
+    // Walk the G-code, keeping the modal feedrate and fan speed, and look at the extrusions inside the canopy.
+    std::istringstream input(gcode);
+    std::string        line;
+    bool               in_canopy        = false;
+    double             feedrate         = 0.;
+    int                fan              = 0;
+    size_t             canopy_moves     = 0;
+    double             fastest_feedrate = 0.;
+    int                slowest_fan      = 255;
+    while (std::getline(input, line)) {
+        if (line.rfind(";TYPE:", 0) == 0)
+            in_canopy = line == ";TYPE:Support canopy";
+        else if (line.rfind("M106", 0) == 0 && line.find(" S") != std::string::npos)
+            fan = std::stoi(line.substr(line.find(" S") + 2));
+        else if (line.rfind("M107", 0) == 0)
+            fan = 0;
+        else if (line.rfind("G1 ", 0) == 0 || line.rfind("G2 ", 0) == 0 || line.rfind("G3 ", 0) == 0) {
+            if (const size_t f = line.find(" F"); f != std::string::npos)
+                feedrate = std::stod(line.substr(f + 2));
+            if (in_canopy && line.find(" E") != std::string::npos) {
+                ++canopy_moves;
+                fastest_feedrate = std::max(fastest_feedrate, feedrate);
+                slowest_fan      = std::min(slowest_fan, fan);
+            }
+        }
+    }
+    REQUIRE(canopy_moves > 0);
+    // Feedrates are in mm/min. Cooling may slow the canopy down further, never speed it up.
+    CHECK(fastest_feedrate <= canopy_speed * 60. + EPSILON);
+    // M106 takes the fan speed on a 0-255 scale, as GCodeWriter::set_fan() scales it.
+    CHECK(slowest_fan == int(255.5 * canopy_fan / 100.));
 }

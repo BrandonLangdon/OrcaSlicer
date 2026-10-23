@@ -74,6 +74,7 @@ struct Settings
 		        true, // InternalBridgeInfill
 		        true, // Brim
 		        true, // SupportTransition
+		        true, // SupportCanopy
 		        true, // Mixed
 		};
 };
