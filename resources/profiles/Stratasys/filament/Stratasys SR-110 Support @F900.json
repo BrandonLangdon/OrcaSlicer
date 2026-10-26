@@ -1,0 +1,11 @@
+{
+	"type": "filament",
+	"name": "Stratasys SR-110 Support @F900",
+	"inherits": "Stratasys SR-110 Support @base",
+	"from": "system",
+	"setting_id": "1G2dS4MTTpDYhKGO",
+	"instantiation": "true",
+	"compatible_printers": [
+		"Stratasys F900 T16 model T12 support"
+	]
+}

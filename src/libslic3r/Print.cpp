@@ -49,6 +49,7 @@
 #include "Polyline.hpp"
 #include "ArcFitter.hpp"
 #include <cstdio>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/thread/lock_types.hpp>
 #include <iterator>
@@ -337,6 +338,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "hot_plate_temp_initial_layer",
         "textured_plate_temp_initial_layer",
         "gcode_add_line_number",
+        "output_file_format",
         "layer_change_gcode",
         "time_lapse_gcode",
         "wrapping_detection_gcode",
@@ -2684,7 +2686,8 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                     const double bridge_width    = bridge_width_opt.get_abs_value(nozzle_diameter);
                     if (bridge_width <= 0.)
                         continue;
-                    if (bridge_width > nozzle_diameter) {
+                    // Orca: 100% of some diameters, such as 0.356 mm, rounds just above the diameter.
+                    if (bridge_width > nozzle_diameter + EPSILON) {
                         err_msg = L("Bridge line width must not exceed nozzle diameter");
                         return { err_msg, object, "bridge_line_width" };
                     }
@@ -5651,7 +5654,14 @@ std::string Print::output_filename(const std::string &filename_base) const
     }
     config.set_key_value("filament_name", new ConfigOptionString(filament_name));
 
-    return this->PrintBase::output_filename(m_config.filename_format.value, ".gcode", filename_base, &config);
+    std::string filename = this->PrintBase::output_filename(m_config.filename_format.value, ".gcode", filename_base, &config);
+    // Orca: a Stratasys job takes the CMB extension in place of the G-code one the filename format usually ends with.
+    if (m_config.output_file_format != offGCode) {
+        if (boost::iends_with(filename, ".gcode"))
+            filename.resize(filename.size() - 6);
+        filename += m_config.output_file_format == offCmbGz ? ".cmb.gz" : ".cmb";
+    }
+    return filename;
 }
 
 std::string Print::get_model_name() const

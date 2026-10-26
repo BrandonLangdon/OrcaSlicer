@@ -1,0 +1,17 @@
+{
+	"type": "filament",
+	"name": "Stratasys TPU 92A @F170",
+	"inherits": "Stratasys TPU 92A @base",
+	"from": "system",
+	"setting_id": "HhVU7IedkEYXhox4",
+	"instantiation": "true",
+	"filament_shrink": [
+		"98.72%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"99.51%"
+	],
+	"compatible_printers": [
+		"Stratasys F170 T14 model T14 support"
+	]
+}

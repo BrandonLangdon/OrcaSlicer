@@ -1,0 +1,26 @@
+{
+	"type": "filament",
+	"name": "Stratasys PC @base",
+	"inherits": "fdm_filament_pc",
+	"from": "system",
+	"filament_id": "OFeLX0CR",
+	"instantiation": "false",
+	"filament_vendor": [
+		"Stratasys"
+	],
+	"filament_type": [
+		"PC"
+	],
+	"filament_diameter": [
+		"1.78"
+	],
+	"filament_is_support": [
+		"0"
+	],
+	"filament_soluble": [
+		"0"
+	],
+	"filament_notes": [
+		"CMB_MATERIAL=PC"
+	]
+}

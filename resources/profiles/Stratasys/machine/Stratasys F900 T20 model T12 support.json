@@ -1,0 +1,36 @@
+{
+	"type": "machine",
+	"name": "Stratasys F900 T20 model T12 support",
+	"inherits": "fdm_machine_common",
+	"from": "system",
+	"setting_id": "AY7ak2zlsjD3jHvU",
+	"instantiation": "true",
+	"printer_model": "Stratasys F900",
+	"printer_variant": "0.508+0.33",
+	"nozzle_diameter": [
+		"0.508",
+		"0.33"
+	],
+	"min_layer_height": [
+		"0.33",
+		"0.33"
+	],
+	"max_layer_height": [
+		"0.33",
+		"0.33"
+	],
+	"printable_area": [
+		"0x0",
+		"914.4x0",
+		"914.4x609.6",
+		"0x609.6"
+	],
+	"printable_height": "914.4",
+	"default_print_profile": "0.33mm Standard @Stratasys F900 T20-T12",
+	"output_file_format": "cmb",
+	"printer_notes": "PRINTER_VENDOR_STRATASYS\nCMB_MACHINE=f900\nCMB_MODEL_TIP=T20\nCMB_SUPPORT_TIP=T12",
+	"default_filament_profile": [
+		"Stratasys ASA @F900 T20",
+		"Stratasys SR-30 Support @F900"
+	]
+}

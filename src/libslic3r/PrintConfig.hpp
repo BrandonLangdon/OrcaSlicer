@@ -48,6 +48,13 @@ namespace Slic3r {
 
 class DynamicPrintConfig;
 
+// Orca: what an FFF export writes: G-code, or a Stratasys CMB job converted from the sliced toolpaths.
+enum OutputFileFormat : unsigned char {
+    offGCode,
+    offCmb,
+    offCmbGz,
+};
+
 enum GCodeFlavor : unsigned char {
     gcfMarlinLegacy, 
     gcfKlipper, 
@@ -796,6 +803,7 @@ extern std::vector<std::string> save_extruder_nozzle_stats_to_string(const std::
 
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(PrinterTechnology)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(GCodeFlavor)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(OutputFileFormat)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(FuzzySkinType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(FuzzySkinMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TopSurfaceExpansionDirection)
@@ -1774,6 +1782,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                gcode_add_line_number))
     ((ConfigOptionBool,                bbl_bed_temperature_gcode))
     ((ConfigOptionEnum<GCodeFlavor>,   gcode_flavor))
+    ((ConfigOptionEnum<OutputFileFormat>, output_file_format))
     ((ConfigOptionBool,                gcode_skip_config_block))
     ((ConfigOptionFloat,               time_cost)) 
     ((ConfigOptionString,              layer_change_gcode))

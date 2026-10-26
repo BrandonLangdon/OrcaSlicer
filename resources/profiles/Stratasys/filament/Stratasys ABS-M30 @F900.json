@@ -1,0 +1,17 @@
+{
+	"type": "filament",
+	"name": "Stratasys ABS-M30 @F900",
+	"inherits": "Stratasys ABS-M30 @base",
+	"from": "system",
+	"setting_id": "rtmsPPR6U8dkL0RH",
+	"instantiation": "true",
+	"filament_shrink": [
+		"99.41%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"99.41%"
+	],
+	"compatible_printers": [
+		"Stratasys F900 T16 model T12 support"
+	]
+}

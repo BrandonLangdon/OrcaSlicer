@@ -1,0 +1,12 @@
+{
+	"type": "machine_model",
+	"name": "Stratasys F170",
+	"machine_tech": "FFF",
+	"family": "Stratasys",
+	"model_id": "Stratasys F170",
+	"nozzle_diameter": "0.356;0.406",
+	"bed_model": "",
+	"bed_texture": "",
+	"hotend_model": "",
+	"default_materials": "Stratasys ABS @F170;Stratasys ASA @F170;Stratasys TPU 92A @F170;Stratasys PLA @F170;Stratasys QSR Support @F170"
+}

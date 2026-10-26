@@ -238,6 +238,13 @@ static t_config_enum_values s_keys_map_GCodeFlavor {
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(GCodeFlavor)
 
+static t_config_enum_values s_keys_map_OutputFileFormat {
+    { "gcode",  offGCode },
+    { "cmb",    offCmb },
+    { "cmb.gz", offCmbGz }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(OutputFileFormat)
+
 static t_config_enum_values s_keys_map_BedTempFormula {
     { "by_first_filament",int(BedTempFormula::btfFirstFilament) },
     { "by_highest_temp", int(BedTempFormula::btfHighestTemp)}
@@ -4654,6 +4661,21 @@ void PrintConfigDef::init_fff_params()
     def->mode = comAdvanced;
     def->readonly = false;
     def->set_default_value(new ConfigOptionEnum<GCodeFlavor>(gcfMarlinLegacy));
+
+    def = this->add("output_file_format", coEnum);
+    def->label = L("Output file format");
+    def->tooltip = L("The file an export writes. Stratasys printers take a CMB job instead of G-code: the sliced toolpaths are "
+                     "converted to one, plain for the Fortus series or gzipped for the F-series. Review an exported job in the preview "
+                     "before printing it.");
+    def->enum_keys_map = &ConfigOptionEnum<OutputFileFormat>::get_enum_values();
+    def->enum_values.push_back("gcode");
+    def->enum_values.push_back("cmb");
+    def->enum_values.push_back("cmb.gz");
+    def->enum_labels.push_back(L("G-code"));
+    def->enum_labels.push_back(L("Stratasys CMB"));
+    def->enum_labels.push_back(L("Stratasys CMB, gzipped"));
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionEnum<OutputFileFormat>(offGCode));
 
     def = this->add("gcode_skip_config_block", coBool);
     def->label = L("Skip G-code config block");
@@ -12595,7 +12617,8 @@ std::map<std::string, std::string> validate(const FullPrintConfig &cfg, bool und
             std::string key(widths[i]);
             double abs_width = cfg.get_abs_value(key, max_nozzle_diameter);
             double allowed_max = (key == "bridge_line_width") ? min_nozzle_diameter : MAX_LINE_WIDTH_MULTIPLIER * max_nozzle_diameter;
-            if (abs_width > allowed_max) {
+            // Orca: 100% of some diameters, such as 0.356 mm, rounds just above the diameter.
+            if (abs_width > allowed_max + EPSILON) {
                 if (key == "bridge_line_width")
                     error_message.emplace(key, _u8L("Bridge line width must not exceed nozzle diameter: ") + std::to_string(abs_width));
                 else

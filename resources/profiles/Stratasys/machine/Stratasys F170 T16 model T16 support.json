@@ -1,0 +1,36 @@
+{
+	"type": "machine",
+	"name": "Stratasys F170 T16 model T16 support",
+	"inherits": "fdm_machine_common",
+	"from": "system",
+	"setting_id": "UddwI7rIpAGHLG5o",
+	"instantiation": "true",
+	"printer_model": "Stratasys F170",
+	"printer_variant": "0.406",
+	"nozzle_diameter": [
+		"0.406",
+		"0.406"
+	],
+	"min_layer_height": [
+		"0.254",
+		"0.254"
+	],
+	"max_layer_height": [
+		"0.254",
+		"0.254"
+	],
+	"printable_area": [
+		"0x0",
+		"254x0",
+		"254x254",
+		"0x254"
+	],
+	"printable_height": "254",
+	"default_print_profile": "0.254mm Standard @Stratasys F170 T16-T16",
+	"output_file_format": "cmb.gz",
+	"printer_notes": "PRINTER_VENDOR_STRATASYS\nCMB_MACHINE=dorado1\nCMB_MODEL_TIP=T16\nCMB_SUPPORT_TIP=T16",
+	"default_filament_profile": [
+		"Stratasys PLA @F170",
+		"Stratasys PLA @F170"
+	]
+}

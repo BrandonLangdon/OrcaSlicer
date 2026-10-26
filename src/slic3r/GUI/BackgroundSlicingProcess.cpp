@@ -40,6 +40,7 @@
 #include "libslic3r/SLAPrint.hpp"
 #include "libslic3r/Utils.hpp"
 #include "PostProcessor.hpp"
+#include "libslic3r/Format/CMB.hpp"
 #include "libslic3r/Format/SL1.hpp"
 #include "libslic3r/Thread.hpp"
 #include "libslic3r/libslic3r.h"
@@ -49,7 +50,9 @@
 #include <cctype>
 
 #include <boost/format/format_fwd.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem/operations.hpp>
+#include <cstring>
 #include <boost/log/trivial.hpp>
 #include <boost/nowide/cstdio.hpp>
 #include "I18N.hpp"
@@ -840,6 +843,27 @@ bool BackgroundSlicingProcess::invalidate_all_steps()
 // G-code is generated in m_temp_output_path.
 // Optionally run a post-processing script on a copy of m_temp_output_path.
 // Copy the final G-code to target location (possibly a SD card, if it is a removable media, then verify that the file was written without an error).
+// Orca: a printer that takes Stratasys CMB jobs gets one converted from the toolpaths in place of the G-code, which
+// post-processing scripts and line numbering are therefore not applied to. Returns false for a G-code printer.
+static bool export_cmb_job(const Print &print, const GCodeProcessorResult &toolpaths, const std::string &export_path)
+{
+    const OutputFileFormat format = print.config().output_file_format;
+    if (format == offGCode)
+        return false;
+    std::string name = boost::filesystem::path(export_path).filename().string();
+    for (const char *ext : { ".gz", ".cmb" })
+        if (boost::iends_with(name, ext))
+            name.resize(name.size() - strlen(ext));
+    try {
+        const int build_time = int(toolpaths.print_statistics.modes[size_t(PrintEstimatedStatistics::ETimeMode::Normal)].time);
+        write_cmb(cmb_job_from_toolpaths(toolpaths, cmb_export_settings(print.full_print_config(), name, build_time)), export_path,
+                  format == offCmbGz);
+    } catch (const Slic3r::RuntimeError &ex) {
+        throw Slic3r::ExportError(ex.what());
+    }
+    return true;
+}
+
 void BackgroundSlicingProcess::finalize_gcode()
 {
     m_print->set_status(95, _u8L("Running post-processing scripts"));
@@ -847,6 +871,10 @@ void BackgroundSlicingProcess::finalize_gcode()
     // Perform the final post-processing of the export path by applying the print statistics over the file name.
     std::string export_path = m_fff_print->print_statistics().finalize_output_path(m_export_path);
     std::string output_path = m_temp_output_path;
+    if (export_cmb_job(*m_fff_print, *m_gcode_result, export_path)) {
+        m_print->set_status(100, GUI::format(_L("Stratasys CMB job exported to %1%"), export_path));
+        return;
+    }
     // Both output_path and export_path ar in-out parameters.
     // If post processed, output_path will differ from m_temp_output_path as run_post_process_scripts() will make a copy of the G-code to not
     // collide with the G-code viewer memory mapping of the unprocessed G-code. G-code viewer maps unprocessed G-code, because m_gcode_result
@@ -925,6 +953,12 @@ void BackgroundSlicingProcess::export_gcode()
     // Perform the final post-processing of the export path by applying the print statistics over the file name.
     std::string export_path = m_fff_print->print_statistics().finalize_output_path(m_export_path);
     std::string output_path = m_temp_output_path;
+    if (export_cmb_job(*m_fff_print, *m_gcode_result, export_path)) {
+        auto evt = new wxCommandEvent(m_event_export_finished_id, GUI::wxGetApp().mainframe->m_plater->GetId());
+        evt->SetString(wxString::FromUTF8(export_path.c_str(), export_path.length()));
+        wxQueueEvent(GUI::wxGetApp().mainframe->m_plater, evt);
+        return;
+    }
 
     // FIXME localize the messages
     std::string error_message;

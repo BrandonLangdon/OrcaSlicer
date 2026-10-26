@@ -1,0 +1,17 @@
+{
+	"type": "filament",
+	"name": "Stratasys Nylon 12 @F900",
+	"inherits": "Stratasys Nylon 12 @base",
+	"from": "system",
+	"setting_id": "vWl44jt41T7BOjIM",
+	"instantiation": "true",
+	"filament_shrink": [
+		"99.21%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"99.45%"
+	],
+	"compatible_printers": [
+		"Stratasys F900 T16 model T12 support"
+	]
+}

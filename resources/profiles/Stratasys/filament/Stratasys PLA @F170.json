@@ -1,0 +1,17 @@
+{
+	"type": "filament",
+	"name": "Stratasys PLA @F170",
+	"inherits": "Stratasys PLA @base",
+	"from": "system",
+	"setting_id": "o747ucXEpw2reZeF",
+	"instantiation": "true",
+	"filament_shrink": [
+		"99.98%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"100.00%"
+	],
+	"compatible_printers": [
+		"Stratasys F170 T16 model T16 support"
+	]
+}

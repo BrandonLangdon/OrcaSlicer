@@ -3068,6 +3068,10 @@ void MainFrame::init_menubar_as_editor()
             [this](wxCommandEvent&) { if (m_plater) { m_plater->add_model(); } }, "", nullptr,
             [this](){return can_add_models(); }, this);
 #endif
+        // Orca: G-code and Stratasys CMB jobs otherwise only open by drag and drop or from the recent files.
+        append_menu_item(import_menu, wxID_ANY, _L("Import G-code/CMB") + dots, _L("Preview a G-code file or a Stratasys CMB job"),
+            [this](wxCommandEvent&) { if (m_plater) m_plater->load_gcode(); }, "menu_import", nullptr,
+            []() { return true; }, this);
         append_menu_item(import_menu, wxID_ANY, _L("Import ZIP Archive") + dots, _L("Load models contained within a ZIP archive"),
             [this](wxCommandEvent&) { if (m_plater) m_plater->import_zip_archive(); }, "menu_import", nullptr,
             [this]() { return can_add_models(); });

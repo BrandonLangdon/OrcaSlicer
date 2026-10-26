@@ -1,0 +1,11 @@
+{
+	"type": "filament",
+	"name": "Stratasys PC_S Support @F900",
+	"inherits": "Stratasys PC_S Support @base",
+	"from": "system",
+	"setting_id": "NmPM4a0KmGbMvTyx",
+	"instantiation": "true",
+	"compatible_printers": [
+		"Stratasys F900 T16 model T16 support"
+	]
+}

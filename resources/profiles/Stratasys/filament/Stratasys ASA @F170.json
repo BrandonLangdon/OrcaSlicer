@@ -1,0 +1,17 @@
+{
+	"type": "filament",
+	"name": "Stratasys ASA @F170",
+	"inherits": "Stratasys ASA @base",
+	"from": "system",
+	"setting_id": "4lhcet2WLQCQOcxP",
+	"instantiation": "true",
+	"filament_shrink": [
+		"99.41%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"99.51%"
+	],
+	"compatible_printers": [
+		"Stratasys F170 T14 model T14 support"
+	]
+}

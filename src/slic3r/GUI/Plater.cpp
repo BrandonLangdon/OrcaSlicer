@@ -166,6 +166,7 @@
 #include "libslic3r/Format/DRC.hpp"
 #include "libslic3r/Format/STEP.hpp"
 #include "libslic3r/Format/AMF.hpp"
+#include "libslic3r/Format/CMB.hpp"
 //#include "libslic3r/Format/3mf.hpp"
 #include "libslic3r/Format/bbs_3mf.hpp"
 #include "libslic3r/GCode/ThumbnailData.hpp"
@@ -18146,10 +18147,28 @@ void Plater::load_gcode(const wxString& filename)
 {
     BOOST_LOG_TRIVIAL(trace) << __FUNCTION__ << __LINE__ << " entry and filename: " << filename;
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__;
-    if (! is_gcode_file(into_u8(filename))
+    if (! (is_gcode_file(into_u8(filename)) || is_cmb_file(into_u8(filename)))
         || (m_last_loaded_gcode == filename && m_only_gcode)
         )
         return;
+
+    // Orca: a Stratasys CMB job is previewed as the G-code it converts to, written to a temporary file.
+    std::string gcode_path = into_u8(filename);
+    if (is_cmb_file(gcode_path)) {
+        wxBusyCursor wait;
+        try {
+            const CmbJob job = read_cmb(gcode_path);
+            gcode_path = (boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("orca-cmb-%%%%-%%%%.gcode")).string();
+            boost::nowide::ofstream out(gcode_path);
+            GCodeProcessor::s_IsBBLPrinter = wxGetApp().preset_bundle->is_bbl_vendor();
+            cmb_to_gcode(job, out);
+            if (!out)
+                throw Slic3r::RuntimeError("Cannot write " + gcode_path);
+        } catch (const std::exception &ex) {
+            show_error(this, ex.what());
+            return;
+        }
+    }
 
     m_last_loaded_gcode = filename;
 
@@ -18157,7 +18176,7 @@ void Plater::load_gcode(const wxString& filename)
     // .gcode.3mf's do, so unsaved preset changes get the save-or-discard choice of opening a project rather
     // than the new project's choice to keep them.
     PresetBundle*                     preset_bundle = wxGetApp().preset_bundle;
-    const std::string                 path          = into_u8(filename);
+    const std::string                &path          = gcode_path;
     std::optional<DynamicPrintConfig> file_config;
     ConfigSubstitutions               substitutions;
     {
@@ -18250,7 +18269,7 @@ void Plater::load_gcode(const wxString& filename)
     try
     {
         GCodeProcessor::s_IsBBLPrinter = wxGetApp().preset_bundle->is_bbl_vendor();
-        processor.process_file(filename.ToUTF8().data());
+        processor.process_file(gcode_path);
     }
     catch (const std::exception& ex)
     {
@@ -18745,7 +18764,7 @@ void ProjectDropDialog::on_dpi_changed(const wxRect& suggested_rect)
 bool Plater::load_files(const wxArrayString& filenames)
 {
     const std::regex pattern_drop(".*[.](stp|step|stl|oltp|obj|amf|3mf|svg|zip|drc|glb|gltf|fbx)", std::regex::icase);
-    const std::regex pattern_gcode_drop(".*[.](gcode|g)", std::regex::icase);
+    const std::regex pattern_gcode_drop(".*[.](gcode|g|cmb|cmb[.]gz)", std::regex::icase);
 
     std::vector<fs::path> normal_paths;
     std::vector<fs::path> gcode_paths;
@@ -19532,10 +19551,13 @@ void Plater::export_gcode(bool prefer_removable)
     fs::path output_path;
     {
         std::string ext = default_output_file.extension().string();
-        wxFileDialog dlg(this, (printer_technology() == ptFFF) ? _L("Save G-code file as:") : _L("Save SLA file as:"),
+        // Orca: a Stratasys printer exports a CMB job in place of G-code.
+        const auto *output_format = wxGetApp().preset_bundle->printers.get_edited_preset().config.option<ConfigOptionEnum<OutputFileFormat>>("output_file_format");
+        const bool  cmb           = printer_technology() == ptFFF && output_format != nullptr && output_format->value != offGCode;
+        wxFileDialog dlg(this, cmb ? _L("Save Stratasys CMB job as:") : (printer_technology() == ptFFF) ? _L("Save G-code file as:") : _L("Save SLA file as:"),
             start_dir,
             from_path(default_output_file.filename()),
-            GUI::file_wildcards((printer_technology() == ptFFF) ? FT_GCODE : FT_SL1, ext),
+            GUI::file_wildcards(cmb ? FT_CMB : (printer_technology() == ptFFF) ? FT_GCODE : FT_SL1, ext),
             wxFD_SAVE | wxFD_OVERWRITE_PROMPT
         );
         if (dlg.ShowModal() == wxID_OK) {
