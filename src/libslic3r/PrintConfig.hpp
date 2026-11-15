@@ -174,6 +174,10 @@ inline bool is_separable_infill_pattern(InfillPattern pattern)
 inline bool is_octree_infill_pattern(InfillPattern pattern) { return pattern == ipAdaptiveCubic || pattern == ipSupportCubic; }
 // Orca: Infill patterns graded by the "adaptive_infill_mode" option.
 inline bool is_adaptive_infill_pattern(InfillPattern pattern) { return pattern == ipGyroid || pattern == ipTpmsD || pattern == ipTpmsFK; }
+// Orca: Infill patterns that take their density area by area, so the "sparse_infill_gradient_*" options can raise it
+// below top surfaces. Lightning and the octree patterns build one structure for the object from the region's density,
+// and Locked Zag fills at its own skin and skeleton densities.
+inline bool is_gradable_infill_pattern(InfillPattern pattern) { return pattern != ipLightning && pattern != ipLockedZag && !is_octree_infill_pattern(pattern); }
 
 // Orca: Infill patterns that round their corners by the "sparse_infill_smooth_factor" option.
 // Grid, Triangles and Tri-hexagon only do so in their trapezoidal form, which is generated with more
@@ -1520,6 +1524,9 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionEnum<AdaptiveInfillMode>, adaptive_infill_mode))
     ((ConfigOptionPercent,              adaptive_infill_interior_density))
     ((ConfigOptionEnum<AdaptiveInfillGradient>, adaptive_infill_gradient))
+    ((ConfigOptionFloat,                sparse_infill_gradient_height))
+    ((ConfigOptionInt,                  sparse_infill_gradient_steps))
+    ((ConfigOptionPercent,              sparse_infill_gradient_density_step))
     ((ConfigOptionBool,                 gyroid_optimized))
     // Ironing options
     ((ConfigOptionEnum<IroningType>, ironing_type))

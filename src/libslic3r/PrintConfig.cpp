@@ -3779,6 +3779,41 @@ void PrintConfigDef::init_fff_params()
     def->mode       = comAdvanced;
     def->set_default_value(new ConfigOptionEnum<AdaptiveInfillGradient>(AdaptiveInfillGradient::Linear));
 
+    def             = this->add("sparse_infill_gradient_height", coFloat);
+    def->label      = L("Top gradient height");
+    def->category   = L("Strength");
+    def->tooltip    = L("Raises the sparse infill density in steps over this height below the solid layers of every top "
+                        "surface, so the infill gives the top surfaces more support. Only the infill under a top surface "
+                        "is made denser, which includes ledges and slopes as well as the top of the object.\n"
+                        "Set to 0 to disable. Has no effect on the Lightning, Adaptive Cubic, Support Cubic and Locked Zag patterns.");
+    def->sidetext   = "mm";
+    def->min        = 0;
+    def->mode       = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0));
+
+    def             = this->add("sparse_infill_gradient_steps", coInt);
+    def->label      = L("Top gradient steps");
+    def->category   = L("Strength");
+    def->tooltip    = L("Number of equal steps the top gradient height is divided into. The density rises by the density "
+                        "increase at each step closer to the top surface.");
+    def->min        = 1;
+    def->mode       = comAdvanced;
+    def->set_default_value(new ConfigOptionInt(2));
+
+    def             = this->add("sparse_infill_gradient_density_step", coPercent);
+    def->label      = L("Top gradient density increase per step");
+    def->category   = L("Strength");
+    // xgettext:no-c-format, no-boost-format
+    def->tooltip    = L("How much the sparse infill density rises at each step of the top gradient, in percentage "
+                        "points. For example, 15% infill with a 2 mm gradient in 2 steps and a 10% increase prints "
+                        "25% infill 1 to 2 mm below the solid layers and 35% in the last millimetre. The density is "
+                        "capped at 100%.");
+    def->sidetext   = "%";
+    def->min        = 0;
+    def->max        = 100;
+    def->mode       = comAdvanced;
+    def->set_default_value(new ConfigOptionPercent(10));
+
     // Z-buckling bias optimization (experimental). Tightens the gyroid wave along the Z
     // (vertical) axis at low infill density to shorten the effective column length under
     // Z-axis compression. Filament use at the same `sparse_infill_density` setting is

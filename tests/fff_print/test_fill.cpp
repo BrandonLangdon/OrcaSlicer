@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include "libslic3r/Fill/FillBase.hpp"
 #include "libslic3r/Polyline.hpp"
 #include "libslic3r/Surface.hpp"
@@ -33,6 +34,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include "libslic3r/ClipperUtils.hpp"
+#include "libslic3r/Config.hpp"
 #include "libslic3r/AABBTreeLines.hpp"
 #include "libslic3r/Fill/Fill.hpp"
 #include "libslic3r/Fill/FillAdaptive.hpp"
@@ -2504,4 +2506,143 @@ TEST_CASE("Monotonic line top surfaces print their gap fill next to their lines 
     }
     REQUIRE(gap_fills > 0);
     CHECK(gap_fills_before_a_line > 0);
+}
+
+namespace {
+
+// 15% sparse infill under 5 solid top layers of 0.2 mm, graded over the last 2 mm in 2 steps of 10%.
+const std::initializer_list<ConfigBase::SetDeserializeItem> graded_infill_config = {
+    { "layer_height", 0.2 },
+    { "initial_layer_print_height", 0.2 },
+    { "sparse_infill_density", "15%" },
+    { "sparse_infill_pattern", "rectilinear" },
+    { "top_shell_layers", 5 },
+    { "top_shell_thickness", 0 },
+    { "sparse_infill_gradient_height", 2 },
+    { "sparse_infill_gradient_steps", 2 },
+    { "sparse_infill_gradient_density_step", "10%" },
+};
+
+// The sparse infill area of a layer by density, the region's 15% for a surface the gradient left alone.
+std::map<int, double> sparse_area_by_density(const Layer &layer)
+{
+    std::map<int, double> areas;
+    for (const LayerRegion *layerm : layer.regions())
+        for (const Surface &surface : layerm->fill_surfaces.surfaces)
+            if (surface.surface_type == stInternal)
+                areas[int(std::lround(surface.infill_density < 0.f ? 15.f : surface.infill_density))] += surface.area();
+    return areas;
+}
+
+// The length of a layer's sparse infill toolpaths, in millimetres.
+double sparse_infill_length(const Layer &layer)
+{
+    double length  = 0.;
+    auto   account = [&length](const ExtrusionPath &path) {
+        if (path.role() == erInternalInfill)
+            length += unscale<double>(path.polyline.length());
+    };
+    for (const LayerRegion *layerm : layer.regions())
+        for (const ExtrusionEntity *entity : layerm->fills.flatten().entities) {
+            if (auto *path = dynamic_cast<const ExtrusionPath *>(entity))
+                account(*path);
+            else if (auto *multi = dynamic_cast<const ExtrusionMultiPath *>(entity))
+                for (const ExtrusionPath &p : multi->paths)
+                    account(p);
+        }
+    return length;
+}
+
+// The density holding most of a layer's sparse infill area.
+int main_density(const std::map<int, double> &areas)
+{
+    return std::max_element(areas.begin(), areas.end(), [](const auto &a, const auto &b) { return a.second < b.second; })->first;
+}
+
+} // namespace
+
+TEST_CASE("Sparse infill density rises in steps below the top surface", "[Fill]")
+{
+    // The 2 mm gradient in 2 steps of 10% or 4 steps of 5%: either way the last step is 15% + 20% = 35%.
+    const auto [steps, increase] = GENERATE(table<int, int>({ { 2, 10 }, { 4, 5 } }));
+    CAPTURE(steps, increase);
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict(graded_infill_config);
+    config.set_deserialize_strict({ { "sparse_infill_gradient_steps", steps },
+                                    { "sparse_infill_gradient_density_step", std::to_string(increase) + "%" } });
+    Print print;
+    Test::init_and_process_print({ TriangleMesh(its_make_cube(20., 20., 10.)) }, print, config);
+    const PrintObject &object = *print.objects().front();
+
+    // The 5 solid top layers of the 10 mm cube leave the sparse infill ending 1 mm below the top.
+    double top_of_infill = 0.;
+    for (const Layer *layer : object.layers())
+        if (! sparse_area_by_density(*layer).empty())
+            top_of_infill = layer->print_z;
+    REQUIRE_THAT(top_of_infill, Catch::Matchers::WithinAbs(9., 1e-3));
+
+    // Each 2 mm / steps band below the top of the infill is one increase less dense than the band above it, and
+    // below the 2 mm the density is the region's 15%: with 2 steps, 35% in the last millimetre and 25% below it.
+    int graded_layers = 0;
+    for (const Layer *layer : object.layers()) {
+        const std::map<int, double> areas = sparse_area_by_density(*layer);
+        if (areas.empty())
+            continue;
+        const double below    = top_of_infill - layer->print_z;
+        const double step     = 2. / steps;
+        const int    expected = below < 2. - EPSILON ? 15 + (steps - int(below / step + EPSILON)) * increase : 15;
+        CAPTURE(layer->print_z);
+        CHECK(main_density(areas) == expected);
+        // A graded layer is graded across its whole area: nothing is left at the region's density.
+        if (expected != 15) {
+            ++ graded_layers;
+            CHECK(areas.count(15) == 0);
+        }
+    }
+    CHECK(graded_layers == 10);
+
+    // The toolpaths follow: the last millimetre lays about 35/15 times the infill of a layer below the gradient.
+    auto layer_at = [&object](double z) {
+        for (const Layer *layer : object.layers())
+            if (std::abs(layer->print_z - z) < EPSILON)
+                return layer;
+        return static_cast<const Layer *>(nullptr);
+    };
+    const Layer *dense = layer_at(top_of_infill - 0.4), *sparse = layer_at(top_of_infill - 4.);
+    REQUIRE(dense != nullptr);
+    REQUIRE(sparse != nullptr);
+    CHECK_THAT(sparse_infill_length(*dense) / sparse_infill_length(*sparse), Catch::Matchers::WithinRel(35. / 15., 0.15));
+}
+
+TEST_CASE("Sparse infill is graded below a ledge only where the ledge covers it", "[Fill]")
+{
+    // A 10 mm tower centred on a 20 mm base 10 mm tall: the base's top is a ring-shaped ledge around the tower.
+    TriangleMesh stepped(its_make_cube(20., 20., 10.));
+    TriangleMesh tower(its_make_cube(10., 10., 10.));
+    tower.translate(5.f, 5.f, 10.f);
+    stepped.merge(tower);
+    Print print;
+    Test::init_and_process_print({ stepped }, print, graded_infill_config);
+    const PrintObject &object = *print.objects().front();
+
+    // Half a millimetre below where the base's infill stops under the ledge's solid layers, 9 mm up.
+    const Layer *layer = nullptr;
+    for (const Layer *l : object.layers())
+        if (std::abs(l->print_z - 8.6) < EPSILON)
+            layer = l;
+    REQUIRE(layer != nullptr);
+    const Point centre = get_extents(layer->lslices).center();
+
+    // Under the ledge the infill is in its densest step; under the tower, whose infill runs on, it is not graded.
+    bool ledge_graded = false, centre_graded = true;
+    for (const LayerRegion *layerm : layer->regions())
+        for (const Surface &surface : layerm->fill_surfaces.surfaces)
+            if (surface.surface_type == stInternal) {
+                if (surface.expolygon.contains(centre))
+                    centre_graded = surface.infill_density >= 0.f;
+                else if (std::lround(surface.infill_density) == 35)
+                    ledge_graded = true;
+            }
+    CHECK(ledge_graded);
+    CHECK_FALSE(centre_graded);
 }

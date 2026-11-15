@@ -48,6 +48,9 @@ public:
     unsigned short  thickness_layers;   // in layers
     double          bridge_angle;       // in radians, ccw, 0 = East, only 0+ (negative means undefined)
     unsigned short  extra_perimeters;
+    // Orca: the sparse infill density of this surface in percent, set where the density is graded below a top
+    // surface; negative for the region's sparse_infill_density.
+    float           infill_density { -1.f };
 
     Surface(SurfaceType _surface_type = stInternal)
         : surface_type(_surface_type),
@@ -56,7 +59,7 @@ public:
     Surface(const Slic3r::Surface &rhs)
         : surface_type(rhs.surface_type), expolygon(rhs.expolygon),
             thickness(rhs.thickness), thickness_layers(rhs.thickness_layers),
-            bridge_angle(rhs.bridge_angle), extra_perimeters(rhs.extra_perimeters)
+            bridge_angle(rhs.bridge_angle), extra_perimeters(rhs.extra_perimeters), infill_density(rhs.infill_density)
         {};
 
     Surface(SurfaceType _surface_type, const ExPolygon &_expolygon)
@@ -66,12 +69,12 @@ public:
     Surface(const Surface &other, const ExPolygon &_expolygon)
         : surface_type(other.surface_type), expolygon(_expolygon),
             thickness(other.thickness), thickness_layers(other.thickness_layers),
-            bridge_angle(other.bridge_angle), extra_perimeters(other.extra_perimeters)
+            bridge_angle(other.bridge_angle), extra_perimeters(other.extra_perimeters), infill_density(other.infill_density)
         {};
     Surface(Surface &&rhs) noexcept
         : surface_type(rhs.surface_type), expolygon(std::move(rhs.expolygon)),
             thickness(rhs.thickness), thickness_layers(rhs.thickness_layers),
-            bridge_angle(rhs.bridge_angle), extra_perimeters(rhs.extra_perimeters)
+            bridge_angle(rhs.bridge_angle), extra_perimeters(rhs.extra_perimeters), infill_density(rhs.infill_density)
         {};
     Surface(SurfaceType _surface_type, const ExPolygon &&_expolygon)
         : surface_type(_surface_type), expolygon(std::move(_expolygon)),
@@ -80,7 +83,7 @@ public:
     Surface(const Surface &other, const ExPolygon &&_expolygon)
         : surface_type(other.surface_type), expolygon(std::move(_expolygon)),
             thickness(other.thickness), thickness_layers(other.thickness_layers),
-            bridge_angle(other.bridge_angle), extra_perimeters(other.extra_perimeters)
+            bridge_angle(other.bridge_angle), extra_perimeters(other.extra_perimeters), infill_density(other.infill_density)
         {};
 
     Surface& operator=(const Surface &rhs)
@@ -91,6 +94,7 @@ public:
         thickness_layers = rhs.thickness_layers;
         bridge_angle     = rhs.bridge_angle;
         extra_perimeters = rhs.extra_perimeters;
+        infill_density   = rhs.infill_density;
         return *this;
     }
 
@@ -102,6 +106,7 @@ public:
         thickness_layers = rhs.thickness_layers;
         bridge_angle     = rhs.bridge_angle;
         extra_perimeters = rhs.extra_perimeters;
+        infill_density   = rhs.infill_density;
         return *this;
     }
 

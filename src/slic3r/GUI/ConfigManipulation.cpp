@@ -851,6 +851,13 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     toggle_line("adaptive_infill_interior_density", have_adaptive_infill);
     toggle_line("adaptive_infill_gradient", have_adaptive_infill);
 
+    bool have_gradable_infill = have_infill && config->option<ConfigOptionPercent>("sparse_infill_density")->value < 100 &&
+                                is_gradable_infill_pattern(pattern);
+    toggle_line("sparse_infill_gradient_height", have_gradable_infill);
+    bool have_infill_gradient = have_gradable_infill && config->opt_float("sparse_infill_gradient_height") > 0;
+    toggle_line("sparse_infill_gradient_steps", have_infill_gradient);
+    toggle_line("sparse_infill_gradient_density_step", have_infill_gradient);
+
     // gyroid_optimized only applies when the sparse infill pattern is gyroid without adaptive density;
     // hide the whole line otherwise.
     toggle_line("gyroid_optimized", have_infill && pattern == ipGyroid && !have_adaptive_infill);

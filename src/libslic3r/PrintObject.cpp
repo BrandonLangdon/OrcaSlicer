@@ -793,6 +793,10 @@ void PrintObject::prepare_infill()
     this->combine_infill();
     m_print->throw_if_canceled();
 
+    // Orca: densify the sparse infill below top surfaces, after the combination so the bands follow the infill printed.
+    this->grade_sparse_infill();
+    m_print->throw_if_canceled();
+
 #ifdef SLIC3R_DEBUG_SLICE_PROCESSING
     for (size_t region_id = 0; region_id < this->num_printing_regions(); ++ region_id) {
         for (const Layer *layer : m_layers) {
@@ -1722,7 +1726,10 @@ bool PrintObject::invalidate_state_by_config_options(
                    || opt_key == "skeleton_infill_density"
                    || opt_key == "skin_infill_density"
                    || opt_key == "infill_lock_depth"
-                   || opt_key == "skin_infill_depth") {
+                   || opt_key == "skin_infill_depth"
+                   || opt_key == "sparse_infill_gradient_height"
+                   || opt_key == "sparse_infill_gradient_steps"
+                   || opt_key == "sparse_infill_gradient_density_step") {
             steps.emplace_back(posPrepareInfill);
         } else if (opt_key == "sparse_infill_density") {
             // One likely wants to reslice only when switching between zero infill to simulate boolean difference (subtracting volumes),
@@ -4953,6 +4960,95 @@ void PrintObject::discover_horizontal_shells()
     }     // for each region
 #endif    /* SLIC3R_DEBUG_SLICE_PROCESSING */
 } // void PrintObject::discover_horizontal_shells()
+
+// Orca: raises the sparse infill density in steps below every top surface, as set by the "sparse_infill_gradient_*"
+// options. The sparse infill stops under the solid layers of a top surface, whether the object's top, a ledge or a
+// slope; the area within one step height below where it stops takes the most steps of density increase, the next
+// step height one fewer, and so on. The rest keeps the region's density. The density is recorded on each surface,
+// and the fill generator batches surfaces by it.
+void PrintObject::grade_sparse_infill()
+{
+    auto graded = [](const PrintRegionConfig &config) {
+        return config.sparse_infill_gradient_height > 0. && config.sparse_infill_gradient_density_step > 0. &&
+               config.sparse_infill_density > 0. && config.sparse_infill_density < 100. &&
+               is_gradable_infill_pattern(config.sparse_infill_pattern);
+    };
+    bool any = false;
+    for (size_t region_id = 0; region_id < this->num_printing_regions(); ++ region_id)
+        any |= graded(this->printing_region(region_id).config());
+    if (! any)
+        return;
+
+    // Where the sparse infill of all regions stops on each layer: its area that the layer above does not continue.
+    // Regions are merged so that a modifier's boundary is not taken for a top surface. Combined infill counts as
+    // sparse on the layers it spans.
+    const size_t          layer_count = m_layers.size();
+    std::vector<Polygons> sparse(layer_count), stops(layer_count);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, layer_count), [this, &sparse](const tbb::blocked_range<size_t> &range) {
+        for (size_t i = range.begin(); i < range.end(); ++ i) {
+            m_print->throw_if_canceled();
+            Polygons area;
+            for (const LayerRegion *layerm : m_layers[i]->regions())
+                polygons_append(area, to_polygons(layerm->fill_surfaces.filter_by_types({ stInternal, stInternalVoid })));
+            sparse[i] = union_(area);
+        }
+    });
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, layer_count), [&sparse, &stops, layer_count](const tbb::blocked_range<size_t> &range) {
+        for (size_t i = range.begin(); i < range.end(); ++ i)
+            stops[i] = i + 1 < layer_count ? diff(sparse[i], sparse[i + 1]) : sparse[i];
+    });
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, layer_count), [this, &stops, &graded, layer_count](const tbb::blocked_range<size_t> &range) {
+        for (size_t i = range.begin(); i < range.end(); ++ i) {
+            m_print->throw_if_canceled();
+            const Layer *layer = m_layers[i];
+            for (LayerRegion *layerm : layer->regions()) {
+                const PrintRegionConfig &config = layerm->region().config();
+                if (! graded(config))
+                    continue;
+                const double height = config.sparse_infill_gradient_height;
+                const int    steps  = std::max(1, config.sparse_infill_gradient_steps.value);
+                const double step   = height / steps;
+                // zones[k]: the area between k and k + 1 step heights below where the infill stops.
+                std::vector<Polygons> zones(steps);
+                for (size_t j = i; j < layer_count; ++ j) {
+                    const double below = m_layers[j]->print_z - layer->print_z;
+                    if (below > height - EPSILON)
+                        break;
+                    polygons_append(zones[std::min(steps - 1, int(below / step + EPSILON))], stops[j]);
+                }
+                // Each band reaches one infill line past the area below where the infill stops, which takes in the
+                // slivers along the walls where the sparse area narrows by less than a line; a band narrower than a
+                // line is not worth a density of its own.
+                const float line = float(layerm->flow(frInfill).scaled_spacing());
+                Surfaces    surfaces;
+                for (Surface &surface : layerm->fill_surfaces.surfaces) {
+                    if (surface.surface_type != stInternal) {
+                        surfaces.emplace_back(std::move(surface));
+                        continue;
+                    }
+                    ExPolygons rest { surface.expolygon };
+                    for (int k = 0; k < steps && ! rest.empty(); ++ k) {
+                        if (zones[k].empty())
+                            continue;
+                        ExPolygons band = opening_ex(intersection_ex(rest, expand(zones[k], line)), 0.5f * line);
+                        if (band.empty())
+                            continue;
+                        rest                = diff_ex(rest, band);
+                        const float density = float(std::min(100., config.sparse_infill_density + (steps - k) * config.sparse_infill_gradient_density_step));
+                        for (ExPolygon &expolygon : band) {
+                            surfaces.emplace_back(surface, std::move(expolygon));
+                            surfaces.back().infill_density = density;
+                        }
+                    }
+                    for (ExPolygon &expolygon : rest)
+                        surfaces.emplace_back(surface, std::move(expolygon));
+                }
+                layerm->fill_surfaces.surfaces = std::move(surfaces);
+            }
+        }
+    });
+}
 
 // combine fill surfaces across layers to honor the "infill every N layers" option
 // Idempotence of this method is guaranteed by the fact that we don't remove things from
