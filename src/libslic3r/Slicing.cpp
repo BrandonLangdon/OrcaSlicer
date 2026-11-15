@@ -208,6 +208,9 @@ SlicingParameters SlicingParameters::create_from_config(
         params.interface_raft_layer_height  = std::max(params.layer_height, 0.75 * support_material_interface_extruder_dmr);
         params.first_object_layer_bridging  = false;
         params.contact_raft_layer_height    = std::max(params.layer_height, 0.75 * support_material_interface_extruder_dmr);
+        // Orca: a Stratasys job is printed at one slice height throughout, its support base included.
+        if (print_config.output_file_format != offGCode)
+            params.base_raft_layer_height = params.interface_raft_layer_height = params.contact_raft_layer_height = params.layer_height;
         params.first_object_layer_height    = params.layer_height;
     }
 

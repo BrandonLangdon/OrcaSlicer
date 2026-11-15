@@ -1,0 +1,26 @@
+{
+	"type": "filament",
+	"name": "Stratasys PC_S Support @base",
+	"inherits": "fdm_filament_pc",
+	"from": "system",
+	"filament_id": "OFFYfaqO",
+	"instantiation": "false",
+	"filament_vendor": [
+		"Stratasys"
+	],
+	"filament_type": [
+		"PC"
+	],
+	"filament_diameter": [
+		"1.78"
+	],
+	"filament_is_support": [
+		"1"
+	],
+	"filament_soluble": [
+		"0"
+	],
+	"filament_notes": [
+		"CMB_MATERIAL=PC_S"
+	]
+}

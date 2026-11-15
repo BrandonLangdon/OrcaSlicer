@@ -1,0 +1,26 @@
+{
+	"type": "filament",
+	"name": "Stratasys QSR Support @base",
+	"inherits": "fdm_filament_pva",
+	"from": "system",
+	"filament_id": "OFRNmo9E",
+	"instantiation": "false",
+	"filament_vendor": [
+		"Stratasys"
+	],
+	"filament_type": [
+		"PVA"
+	],
+	"filament_diameter": [
+		"1.78"
+	],
+	"filament_is_support": [
+		"1"
+	],
+	"filament_soluble": [
+		"1"
+	],
+	"filament_notes": [
+		"CMB_MATERIAL=QSR"
+	]
+}

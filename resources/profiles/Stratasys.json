@@ -1,0 +1,187 @@
+{
+	"name": "Stratasys",
+	"url": "",
+	"version": "01.00.00.03",
+	"force_update": "0",
+	"description": "Stratasys configurations",
+	"machine_model_list": [
+		{
+			"name": "Stratasys F170",
+			"sub_path": "machine/Stratasys F170.json"
+		},
+		{
+			"name": "Stratasys F900",
+			"sub_path": "machine/Stratasys F900.json"
+		}
+	],
+	"process_list": [
+		{
+			"name": "fdm_process_common",
+			"sub_path": "process/fdm_process_common.json"
+		},
+		{
+			"name": "fdm_process_stratasys_common",
+			"sub_path": "process/fdm_process_stratasys_common.json"
+		},
+		{
+			"name": "0.127mm Standard @Stratasys F900 T10-T12",
+			"sub_path": "process/0.127mm Standard @Stratasys F900 T10-T12.json"
+		},
+		{
+			"name": "0.178mm Standard @Stratasys F900 T12-T12",
+			"sub_path": "process/0.178mm Standard @Stratasys F900 T12-T12.json"
+		},
+		{
+			"name": "0.254mm Standard @Stratasys F170 T14-T14",
+			"sub_path": "process/0.254mm Standard @Stratasys F170 T14-T14.json"
+		},
+		{
+			"name": "0.254mm Standard @Stratasys F170 T16-T16",
+			"sub_path": "process/0.254mm Standard @Stratasys F170 T16-T16.json"
+		},
+		{
+			"name": "0.254mm Standard @Stratasys F900 T16-T12",
+			"sub_path": "process/0.254mm Standard @Stratasys F900 T16-T12.json"
+		},
+		{
+			"name": "0.254mm Standard @Stratasys F900 T16-T16",
+			"sub_path": "process/0.254mm Standard @Stratasys F900 T16-T16.json"
+		},
+		{
+			"name": "0.33mm Standard @Stratasys F900 T20-T12",
+			"sub_path": "process/0.33mm Standard @Stratasys F900 T20-T12.json"
+		}
+	],
+	"filament_list": [
+		{
+			"name": "Stratasys ABS @base",
+			"sub_path": "filament/Stratasys ABS @base.json"
+		},
+		{
+			"name": "Stratasys ABS-M30 @base",
+			"sub_path": "filament/Stratasys ABS-M30 @base.json"
+		},
+		{
+			"name": "Stratasys ASA @base",
+			"sub_path": "filament/Stratasys ASA @base.json"
+		},
+		{
+			"name": "Stratasys Nylon 12 @base",
+			"sub_path": "filament/Stratasys Nylon 12 @base.json"
+		},
+		{
+			"name": "Stratasys PC @base",
+			"sub_path": "filament/Stratasys PC @base.json"
+		},
+		{
+			"name": "Stratasys PC_S Support @base",
+			"sub_path": "filament/Stratasys PC_S Support @base.json"
+		},
+		{
+			"name": "Stratasys PLA @base",
+			"sub_path": "filament/Stratasys PLA @base.json"
+		},
+		{
+			"name": "Stratasys QSR Support @base",
+			"sub_path": "filament/Stratasys QSR Support @base.json"
+		},
+		{
+			"name": "Stratasys SR-110 Support @base",
+			"sub_path": "filament/Stratasys SR-110 Support @base.json"
+		},
+		{
+			"name": "Stratasys SR-30 Support @base",
+			"sub_path": "filament/Stratasys SR-30 Support @base.json"
+		},
+		{
+			"name": "Stratasys TPU 92A @base",
+			"sub_path": "filament/Stratasys TPU 92A @base.json"
+		},
+		{
+			"name": "Stratasys ABS @F170",
+			"sub_path": "filament/Stratasys ABS @F170.json"
+		},
+		{
+			"name": "Stratasys ABS-M30 @F900",
+			"sub_path": "filament/Stratasys ABS-M30 @F900.json"
+		},
+		{
+			"name": "Stratasys ASA @F170",
+			"sub_path": "filament/Stratasys ASA @F170.json"
+		},
+		{
+			"name": "Stratasys ASA @F900",
+			"sub_path": "filament/Stratasys ASA @F900.json"
+		},
+		{
+			"name": "Stratasys ASA @F900 T20",
+			"sub_path": "filament/Stratasys ASA @F900 T20.json"
+		},
+		{
+			"name": "Stratasys Nylon 12 @F900",
+			"sub_path": "filament/Stratasys Nylon 12 @F900.json"
+		},
+		{
+			"name": "Stratasys PC @F900",
+			"sub_path": "filament/Stratasys PC @F900.json"
+		},
+		{
+			"name": "Stratasys PC_S Support @F900",
+			"sub_path": "filament/Stratasys PC_S Support @F900.json"
+		},
+		{
+			"name": "Stratasys PLA @F170",
+			"sub_path": "filament/Stratasys PLA @F170.json"
+		},
+		{
+			"name": "Stratasys QSR Support @F170",
+			"sub_path": "filament/Stratasys QSR Support @F170.json"
+		},
+		{
+			"name": "Stratasys SR-110 Support @F900",
+			"sub_path": "filament/Stratasys SR-110 Support @F900.json"
+		},
+		{
+			"name": "Stratasys SR-30 Support @F900",
+			"sub_path": "filament/Stratasys SR-30 Support @F900.json"
+		},
+		{
+			"name": "Stratasys TPU 92A @F170",
+			"sub_path": "filament/Stratasys TPU 92A @F170.json"
+		}
+	],
+	"machine_list": [
+		{
+			"name": "fdm_machine_common",
+			"sub_path": "machine/fdm_machine_common.json"
+		},
+		{
+			"name": "Stratasys F170 T14 model T14 support",
+			"sub_path": "machine/Stratasys F170 T14 model T14 support.json"
+		},
+		{
+			"name": "Stratasys F170 T16 model T16 support",
+			"sub_path": "machine/Stratasys F170 T16 model T16 support.json"
+		},
+		{
+			"name": "Stratasys F900 T10 model T12 support",
+			"sub_path": "machine/Stratasys F900 T10 model T12 support.json"
+		},
+		{
+			"name": "Stratasys F900 T12 model T12 support",
+			"sub_path": "machine/Stratasys F900 T12 model T12 support.json"
+		},
+		{
+			"name": "Stratasys F900 T16 model T12 support",
+			"sub_path": "machine/Stratasys F900 T16 model T12 support.json"
+		},
+		{
+			"name": "Stratasys F900 T16 model T16 support",
+			"sub_path": "machine/Stratasys F900 T16 model T16 support.json"
+		},
+		{
+			"name": "Stratasys F900 T20 model T12 support",
+			"sub_path": "machine/Stratasys F900 T20 model T12 support.json"
+		}
+	]
+}

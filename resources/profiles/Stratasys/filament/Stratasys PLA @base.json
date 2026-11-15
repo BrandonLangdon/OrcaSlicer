@@ -1,0 +1,26 @@
+{
+	"type": "filament",
+	"name": "Stratasys PLA @base",
+	"inherits": "fdm_filament_pla",
+	"from": "system",
+	"filament_id": "OFWUengd",
+	"instantiation": "false",
+	"filament_vendor": [
+		"Stratasys"
+	],
+	"filament_type": [
+		"PLA"
+	],
+	"filament_diameter": [
+		"1.78"
+	],
+	"filament_is_support": [
+		"0"
+	],
+	"filament_soluble": [
+		"0"
+	],
+	"filament_notes": [
+		"CMB_MATERIAL=PLA"
+	]
+}

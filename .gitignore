@@ -55,3 +55,6 @@ __pycache__/
 /.test/
 docs/superpowers/
 ctest_results.xml
+
+# Stratasys sample print jobs and parts, kept local
+tests/fortus_TestFiles/

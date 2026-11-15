@@ -1275,6 +1275,13 @@ void Print::update_shrinkage_compensation(size_t num_extruders, std::vector<int>
         return m_config.filament_shrink.get_at(a) == m_config.filament_shrink.get_at(b) &&
                m_config.filament_shrinkage_compensation_z.get_at(a) == m_config.filament_shrinkage_compensation_z.get_at(b);
     };
+    // Orca: a Stratasys job is scaled as a whole for the model material on the first head, the support printed with it
+    // included, as GrabCAD Print scales its jobs.
+    if (m_config.output_file_format != offGCode) {
+        m_same_shrinkage_compensations = true;
+        set_compensation(0);
+        return;
+    }
     // Usually all filaments share the same shrinkage, then it does not matter which of them print.
     bool uniform = true;
     for (unsigned int extruder = 1; extruder < num_extruders && uniform; ++ extruder)

@@ -1,0 +1,12 @@
+{
+	"type": "machine_model",
+	"name": "Stratasys F900",
+	"machine_tech": "FFF",
+	"family": "Stratasys",
+	"model_id": "Stratasys F900",
+	"nozzle_diameter": "0.254+0.305;0.305;0.406+0.305;0.406;0.508+0.33",
+	"bed_model": "",
+	"bed_texture": "",
+	"hotend_model": "",
+	"default_materials": "Stratasys ASA @F900;Stratasys ASA @F900 T20;Stratasys ABS-M30 @F900;Stratasys Nylon 12 @F900;Stratasys PC @F900;Stratasys SR-30 Support @F900;Stratasys SR-110 Support @F900;Stratasys PC_S Support @F900"
+}

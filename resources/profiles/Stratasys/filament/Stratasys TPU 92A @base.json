@@ -1,0 +1,26 @@
+{
+	"type": "filament",
+	"name": "Stratasys TPU 92A @base",
+	"inherits": "fdm_filament_tpu",
+	"from": "system",
+	"filament_id": "OFCWuWwi",
+	"instantiation": "false",
+	"filament_vendor": [
+		"Stratasys"
+	],
+	"filament_type": [
+		"TPU"
+	],
+	"filament_diameter": [
+		"1.78"
+	],
+	"filament_is_support": [
+		"0"
+	],
+	"filament_soluble": [
+		"0"
+	],
+	"filament_notes": [
+		"CMB_MATERIAL=TPU92BLK"
+	]
+}

@@ -2157,7 +2157,15 @@ wxString print_select_type_label(MainFrame::PrintSelectType type)
     case MainFrame::ePrintPlate:          return _L("Print plate");
     case MainFrame::eExportSlicedFile:    return _L("Export plate sliced file");
     case MainFrame::eExportAllSlicedFile: return _L("Export all sliced file");
-    case MainFrame::eExportGcode:         return _L("Export G-code file");
+    case MainFrame::eExportGcode: {
+        // Orca: a printer that takes another file format, such as a Stratasys CMB job, names it instead.
+        const PresetBundle *bundle = wxGetApp().preset_bundle;
+        const auto *format = bundle ? bundle->printers.get_edited_preset().config.option<ConfigOptionEnum<OutputFileFormat>>("output_file_format") : nullptr;
+        if (format != nullptr && format->value != offGCode)
+            // TRN %s is a file extension, such as .cmb.gz
+            return wxString::Format(_L("Export %s file"), format->value == offCmbGz ? ".cmb.gz" : ".cmb");
+        return _L("Export G-code file");
+    }
     case MainFrame::eSendGcode:           return _L_CONTEXT("Print", "Verb");
     case MainFrame::eSendToPrinter:       return _L("Send");
     case MainFrame::eSendToPrinterAll:    return _L("Send all");
@@ -3068,6 +3076,10 @@ void MainFrame::init_menubar_as_editor()
             [this](wxCommandEvent&) { if (m_plater) { m_plater->add_model(); } }, "", nullptr,
             [this](){return can_add_models(); }, this);
 #endif
+        // Orca: G-code and Stratasys CMB jobs otherwise only open by drag and drop or from the recent files.
+        append_menu_item(import_menu, wxID_ANY, _L("Import G-code/CMB") + dots, _L("Preview a G-code file or a Stratasys CMB job"),
+            [this](wxCommandEvent&) { if (m_plater) m_plater->load_gcode(); }, "menu_import", nullptr,
+            []() { return true; }, this);
         append_menu_item(import_menu, wxID_ANY, _L("Import ZIP Archive") + dots, _L("Load models contained within a ZIP archive"),
             [this](wxCommandEvent&) { if (m_plater) m_plater->import_zip_archive(); }, "menu_import", nullptr,
             [this]() { return can_add_models(); });

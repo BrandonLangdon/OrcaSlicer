@@ -685,6 +685,7 @@ static const FileWildcards file_wildcards_by_type[FT_SIZE] = {
     /* FT_TEX */     { L("Texture"),         { ".png"sv, ".svg"sv } },
     /* FT_SL1 */     { L("Masked SLA files"), { ".sl1"sv, ".sl1s"sv } },
     /* FT_DRC */     { L("Draco files"),     { ".drc"sv } },
+    /* FT_CMB */     { L("Stratasys CMB files"), { ".cmb.gz"sv, ".cmb"sv } },
 };
 
 // This function produces a Win32 file dialog file template mask to be consumed by wxWidgets on all platforms.
@@ -5240,7 +5241,10 @@ void GUI_App::load_gcode(wxWindow* parent, wxString& input_file) const
     wxFileDialog dialog(parent ? parent : GetTopWindow(),
         _L("Choose one file (GCODE/3MF):"),
         app_config->get_last_dir(), "",
-        file_wildcards(FT_GCODE), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        // Orca: macOS filters by the last extension only, so a .cmb.gz job is matched by *.gz; and it may show the
+        // first filter only, so that one takes every file this dialog opens.
+        format_wxstr("%1% (*.gcode, *.cmb, *.cmb.gz)|*.gcode;*.GCODE;*.cmb;*.CMB;*.gz;*.GZ|", _L("G-code and Stratasys CMB files")) +
+            file_wildcards(FT_GCODE) + "|" + file_wildcards(FT_CMB), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
     if (dialog.ShowModal() == wxID_OK)
         input_file = dialog.GetPath();

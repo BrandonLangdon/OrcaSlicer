@@ -1,0 +1,14 @@
+{
+	"type": "process",
+	"name": "fdm_process_stratasys_common",
+	"inherits": "fdm_process_common",
+	"from": "system",
+	"instantiation": "false",
+	"enable_support": "1",
+	"support_type": "normal(auto)",
+	"support_filament": "2",
+	"support_interface_filament": "2",
+	"support_top_z_distance": "0",
+	"support_bottom_z_distance": "0",
+	"enable_arc_fitting": "0"
+}

@@ -1,0 +1,17 @@
+{
+	"type": "filament",
+	"name": "Stratasys PC @F900",
+	"inherits": "Stratasys PC @base",
+	"from": "system",
+	"setting_id": "FuTQT2UX8RdkJZs3",
+	"instantiation": "true",
+	"filament_shrink": [
+		"99.30%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"99.30%"
+	],
+	"compatible_printers": [
+		"Stratasys F900 T16 model T16 support"
+	]
+}

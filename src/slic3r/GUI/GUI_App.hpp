@@ -138,6 +138,8 @@ enum FileType
 
     FT_DRC,
 
+    FT_CMB,
+
     FT_SIZE,
 };
 

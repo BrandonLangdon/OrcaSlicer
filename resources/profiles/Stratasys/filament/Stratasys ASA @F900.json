@@ -1,0 +1,19 @@
+{
+	"type": "filament",
+	"name": "Stratasys ASA @F900",
+	"inherits": "Stratasys ASA @base",
+	"from": "system",
+	"setting_id": "43AU4hilNKbtc7Av",
+	"instantiation": "true",
+	"filament_shrink": [
+		"99.32%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"99.41%"
+	],
+	"compatible_printers": [
+		"Stratasys F900 T10 model T12 support",
+		"Stratasys F900 T12 model T12 support",
+		"Stratasys F900 T16 model T12 support"
+	]
+}

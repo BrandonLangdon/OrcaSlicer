@@ -1,0 +1,11 @@
+{
+	"type": "filament",
+	"name": "Stratasys QSR Support @F170",
+	"inherits": "Stratasys QSR Support @base",
+	"from": "system",
+	"setting_id": "3UOgjBMIOtJb48Aw",
+	"instantiation": "true",
+	"compatible_printers": [
+		"Stratasys F170 T14 model T14 support"
+	]
+}
