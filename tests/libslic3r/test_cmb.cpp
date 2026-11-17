@@ -169,8 +169,9 @@ TEST_CASE("A truncated or foreign file is rejected as a CMB job", "[CMB]")
 }
 
 // The sample jobs live outside tests/data because they include a customer part; the test only runs where they are
-// present. They cover the F170 with and without a purge tower and the F900 across tips and materials.
-TEST_CASE("GrabCAD Print jobs for the F170 and F900 are read in full and written back unchanged", "[CMB]")
+// present. They cover the F170 with and without a purge tower, the F370 across slice heights, and the F900 across tips
+// and materials.
+TEST_CASE("GrabCAD Print jobs for the F170, F370 and F900 are read in full and written back unchanged", "[CMB]")
 {
     namespace fs = boost::filesystem;
     const fs::path dir = fs::path(std::string(TEST_DATA_DIR)) / ".." / "fortus_TestFiles";
@@ -178,7 +179,7 @@ TEST_CASE("GrabCAD Print jobs for the F170 and F900 are read in full and written
         SKIP("The Fortus sample jobs are not present");
 
     size_t jobs = 0;
-    for (const fs::directory_entry &entry : fs::directory_iterator(dir)) {
+    for (const fs::directory_entry &entry : fs::recursive_directory_iterator(dir)) {
         const std::string path = entry.path().string();
         if (!is_cmb_file(path))
             continue;
@@ -223,17 +224,20 @@ Move toolpath_move(EMoveType type, ExtrusionRole role, int head, float x, float 
     return move;
 }
 
-// A 10 mm square on head 1 for each layer, over a support base line of head 2 on the first layer, at the F170's
-// 0.356 mm first layer and 0.254 mm layers.
-void square_toolpaths(GCodeProcessorResult &result, float first_layer_z = 0.3556f)
+// A 10 mm square on head 1 for each layer, over a support base line of head 2 on the first layer, at the F-series'
+// 0.356 mm first layer and `layer` mm layers.
+void square_toolpaths(GCodeProcessorResult &result, float first_layer_z = 0.3556f, float layer = 0.254f)
 {
     auto &m = result.moves;
     m.push_back(toolpath_move(EMoveType::Travel, erNone, 1, 100.f, 90.f, first_layer_z));
     m.push_back(toolpath_move(EMoveType::Extrude, erSupportMaterial, 1, 120.f, 90.f, first_layer_z));
-    for (float z : { first_layer_z, first_layer_z + 0.254f }) {
+    for (float z : { first_layer_z, first_layer_z + layer }) {
         m.push_back(toolpath_move(EMoveType::Travel, erNone, 0, 100.f, 100.f, z));
-        for (auto [x, y] : { std::pair { 110.f, 100.f }, { 110.f, 110.f }, { 100.f, 110.f }, { 100.f, 100.f } })
-            m.push_back(toolpath_move(EMoveType::Extrude, erExternalPerimeter, 0, x, y, z));
+        for (auto [x, y] : { std::pair { 110.f, 100.f }, { 110.f, 110.f }, { 100.f, 110.f }, { 100.f, 100.f } }) {
+            Move move   = toolpath_move(EMoveType::Extrude, erExternalPerimeter, 0, x, y, z);
+            move.height = layer;
+            m.push_back(move);
+        }
     }
 }
 
@@ -319,6 +323,24 @@ TEST_CASE("A thin wall tapering below the narrowest bead Stratasys jobs carry is
     CHECK(east * 25.4f < 135.01f);
 }
 
+TEST_CASE("Toolpaths for the F370 at 0.007 in convert to a job laid out as GrabCAD Print's", "[CMB]")
+{
+    GCodeProcessorResult toolpaths;
+    square_toolpaths(toolpaths, 0.3556f, 0.1778f);
+    CmbExportSettings settings = f170_settings();
+    settings.machine           = "dorado3";
+    settings.layer_height      = 0.1778;
+    settings.bed               = BoundingBoxf(Vec2d::Zero(), Vec2d(355., 254.));
+    const CmbJob back          = parse_cmb(serialize_cmb(cmb_job_from_toolpaths(toolpaths, settings)));
+    REQUIRE(back.opaque.writable);
+    CHECK(back.header.machine == "dorado3");
+    CHECK_THAT(back.header.slice_height, WithinAbs(0.007, 1e-5));
+    REQUIRE(back.layers.size() == 2);
+    CHECK_THAT(back.layers[1].min.z() - back.layers[0].min.z(), WithinAbs(0.007, 1e-4));
+    // GrabCAD Print names the quality of its F370 jobs at 0.007 in "normal".
+    CHECK(back.opaque.header_tail.find("normal") != std::string::npos);
+}
+
 TEST_CASE("Toolpaths a Stratasys printer would not take are refused", "[CMB]")
 {
     // A first layer of 0.254 mm instead of the 0.356 mm every job starts with.
@@ -334,11 +356,23 @@ TEST_CASE("Toolpaths a Stratasys printer would not take are refused", "[CMB]")
     small_bed.bed               = BoundingBoxf(Vec2d::Zero(), Vec2d(100., 100.));
     CHECK_THROWS_AS(cmb_job_from_toolpaths(toolpaths, small_bed), Slic3r::RuntimeError);
 
-    // A bead 1.5 mm wide on a 0.254 mm layer, wider than any Stratasys job lays.
+    // A bead 2.5 mm wide, wider than the 2.13 mm, 0.084 in, that any Stratasys job lays.
     GCodeProcessorResult wide;
     square_toolpaths(wide);
-    wide.moves.back().width = 1.5f;
+    wide.moves.back().width = 2.5f;
     CHECK_THROWS_AS(cmb_job_from_toolpaths(wide, f170_settings()), Slic3r::RuntimeError);
+
+    // A tip and slice height GrabCAD Print's jobs for the machine have not shown: the F170 at 0.007 in, and the F370
+    // at 0.005 in, where GrabCAD Print lays no support base.
+    for (auto [machine, layer] : { std::pair { "dorado1", 0.1778f }, { "dorado3", 0.127f } }) {
+        GCodeProcessorResult other;
+        square_toolpaths(other, 0.3556f, layer);
+        CmbExportSettings settings = f170_settings();
+        settings.machine           = machine;
+        settings.layer_height      = layer;
+        CAPTURE(machine, layer);
+        CHECK_THROWS_AS(cmb_job_from_toolpaths(other, settings), Slic3r::RuntimeError);
+    }
 
     // A machine Orca has no layout for.
     CmbExportSettings unknown = f170_settings();

@@ -147,9 +147,9 @@ CmbExportSettings cmb_export_settings(const DynamicPrintConfig &config, const st
 
 // Converts sliced toolpaths, head 1 laying the model and head 2 the support, into a job for the printer, laid out as
 // GrabCAD Print lays out its own. Throws Slic3r::RuntimeError, without writing anything, when the toolpaths fall
-// outside what GrabCAD Print jobs for the printer have been seen to contain: another first layer height or layer
-// pitch, another head, a bead too wide for the layer, or a move off the bed. A bead narrower than half the layer
-// thickness, narrower than any GrabCAD Print writes, is left out.
+// outside what GrabCAD Print jobs for the printer have been seen to contain: a tip and slice height they do not
+// cover, another first layer height or layer pitch, another head, a bead wider than any they lay, or a move off the
+// bed. A bead narrower than half the layer thickness, narrower than any GrabCAD Print writes, is left out.
 CmbJob cmb_job_from_toolpaths(const GCodeProcessorResult &toolpaths, const CmbExportSettings &settings);
 
 // Writes the job as G-code in millimetres, tagged with the extrusion roles, widths and layer heights the G-code

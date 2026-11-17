@@ -1,0 +1,17 @@
+{
+	"type": "filament",
+	"name": "Stratasys ABS @F370",
+	"inherits": "Stratasys ABS @base",
+	"from": "system",
+	"setting_id": "s0CWnaOvkaSw2R5M",
+	"instantiation": "true",
+	"filament_shrink": [
+		"99.41%"
+	],
+	"filament_shrinkage_compensation_z": [
+		"99.51%"
+	],
+	"compatible_printers": [
+		"Stratasys F370 T14 model T14 support"
+	]
+}

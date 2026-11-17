@@ -1,0 +1,12 @@
+{
+	"type": "machine_model",
+	"name": "Stratasys F370",
+	"machine_tech": "FFF",
+	"family": "Stratasys",
+	"model_id": "Stratasys F370",
+	"nozzle_diameter": "0.356",
+	"bed_model": "",
+	"bed_texture": "",
+	"hotend_model": "",
+	"default_materials": "Stratasys ABS @F370;Stratasys QSR Support @F370"
+}

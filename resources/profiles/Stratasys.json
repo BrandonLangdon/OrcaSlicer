@@ -1,13 +1,17 @@
 {
 	"name": "Stratasys",
 	"url": "",
-	"version": "01.00.00.03",
+	"version": "01.00.00.04",
 	"force_update": "0",
 	"description": "Stratasys configurations",
 	"machine_model_list": [
 		{
 			"name": "Stratasys F170",
 			"sub_path": "machine/Stratasys F170.json"
+		},
+		{
+			"name": "Stratasys F370",
+			"sub_path": "machine/Stratasys F370.json"
 		},
 		{
 			"name": "Stratasys F900",
@@ -28,6 +32,10 @@
 			"sub_path": "process/0.127mm Standard @Stratasys F900 T10-T12.json"
 		},
 		{
+			"name": "0.178mm Standard @Stratasys F370 T14-T14",
+			"sub_path": "process/0.178mm Standard @Stratasys F370 T14-T14.json"
+		},
+		{
 			"name": "0.178mm Standard @Stratasys F900 T12-T12",
 			"sub_path": "process/0.178mm Standard @Stratasys F900 T12-T12.json"
 		},
@@ -40,12 +48,20 @@
 			"sub_path": "process/0.254mm Standard @Stratasys F170 T16-T16.json"
 		},
 		{
+			"name": "0.254mm Standard @Stratasys F370 T14-T14",
+			"sub_path": "process/0.254mm Standard @Stratasys F370 T14-T14.json"
+		},
+		{
 			"name": "0.254mm Standard @Stratasys F900 T16-T12",
 			"sub_path": "process/0.254mm Standard @Stratasys F900 T16-T12.json"
 		},
 		{
 			"name": "0.254mm Standard @Stratasys F900 T16-T16",
 			"sub_path": "process/0.254mm Standard @Stratasys F900 T16-T16.json"
+		},
+		{
+			"name": "0.330mm Standard @Stratasys F370 T14-T14",
+			"sub_path": "process/0.330mm Standard @Stratasys F370 T14-T14.json"
 		},
 		{
 			"name": "0.33mm Standard @Stratasys F900 T20-T12",
@@ -102,6 +118,10 @@
 			"sub_path": "filament/Stratasys ABS @F170.json"
 		},
 		{
+			"name": "Stratasys ABS @F370",
+			"sub_path": "filament/Stratasys ABS @F370.json"
+		},
+		{
 			"name": "Stratasys ABS-M30 @F900",
 			"sub_path": "filament/Stratasys ABS-M30 @F900.json"
 		},
@@ -138,6 +158,10 @@
 			"sub_path": "filament/Stratasys QSR Support @F170.json"
 		},
 		{
+			"name": "Stratasys QSR Support @F370",
+			"sub_path": "filament/Stratasys QSR Support @F370.json"
+		},
+		{
 			"name": "Stratasys SR-110 Support @F900",
 			"sub_path": "filament/Stratasys SR-110 Support @F900.json"
 		},
@@ -162,6 +186,10 @@
 		{
 			"name": "Stratasys F170 T16 model T16 support",
 			"sub_path": "machine/Stratasys F170 T16 model T16 support.json"
+		},
+		{
+			"name": "Stratasys F370 T14 model T14 support",
+			"sub_path": "machine/Stratasys F370 T14 model T14 support.json"
 		},
 		{
 			"name": "Stratasys F900 T10 model T12 support",
