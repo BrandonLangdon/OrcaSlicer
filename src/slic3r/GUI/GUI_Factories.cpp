@@ -1806,6 +1806,10 @@ void MenuFactory::create_extra_object_menu()
     // Modifier Part
     // BBS
     append_menu_items_add_volume(&m_object_menu);
+    append_menu_item(&m_object_menu, wxID_ANY, _L("Create solid fixture"),
+        _L("Turn this object's parts into the pocket of a solid block that holds them"),
+        [](wxCommandEvent&) { obj_list()->create_solid_fixture(); }, "", nullptr,
+        []() { return obj_list()->can_create_solid_fixture(); }, m_parent);
 
     wxMenuItem* props_marker = m_object_menu.Append(wxID_ANY, "", "", wxITEM_SEPARATOR); // AppendSeparator() not assigns an id to item
     m_object_props_marker = props_marker->GetId();

@@ -313,6 +313,25 @@ enum class AdaptiveInfillMode {
 };
 
 // Orca: how the adaptive infill density changes from the object surface to its deepest point.
+// Orca: the hole grid a solid fixture is bolted or pinned to its workspace with.
+enum class FixtureMountPattern {
+    None,
+    BreadboardM6,
+    BreadboardQuarter20,
+    WeldingSystem16,
+    WeldingSystem22,
+    WeldingSystem28,
+    WeldingFiveEighths,
+    PegboardQuarter,
+    PegboardEighth,
+    TSlot20,
+    TSlot30,
+    TSlot40,
+    TSlot8020Series10,
+    TSlot8020Series15,
+    Custom,
+};
+
 enum class AdaptiveInfillGradient {
     Linear,
     Quadratic,
@@ -848,6 +867,7 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(ArcFittingMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(SurfaceFillOrder)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(AdaptiveInfillMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(AdaptiveInfillGradient)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(FixtureMountPattern)
 
 #undef CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS
 
@@ -1335,6 +1355,15 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                support_critical_regions_only))
     ((ConfigOptionBool,                support_remove_small_overhang))
     ((ConfigOptionFloat,               support_top_z_distance))
+    // Orca: solid fixture, a block with a pocket the object's negative volumes cut into it.
+    ((ConfigOptionBool,                solid_fixture))
+    ((ConfigOptionFloat,               solid_fixture_clearance))
+    ((ConfigOptionFloat,               solid_fixture_base_thickness))
+    ((ConfigOptionFloat,               solid_fixture_margin))
+    ((ConfigOptionEnum<FixtureMountPattern>, solid_fixture_mount_pattern))
+    ((ConfigOptionFloat,               solid_fixture_mount_pitch_x))
+    ((ConfigOptionFloat,               solid_fixture_mount_pitch_y))
+    ((ConfigOptionFloat,               solid_fixture_mount_hole))
     ((ConfigOptionFloat,               support_bottom_z_distance))
     ((ConfigOptionInt,                 enforce_support_layers))
     ((ConfigOptionInt,                 support_filament))

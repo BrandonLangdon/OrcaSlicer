@@ -5883,6 +5883,68 @@ ModelVolume* ObjectList::get_selected_model_volume()
     return (*m_objects)[obj_idx]->volumes[vol_idx];
 }
 
+// Orca: a solid fixture is made from a single object of printed parts, with one instance, that is not one already.
+bool ObjectList::can_create_solid_fixture() const
+{
+    const int obj_idx = get_selected_obj_idx();
+    if (obj_idx < 0 || obj_idx >= int(m_objects->size()))
+        return false;
+    const ModelObject &object = *(*m_objects)[obj_idx];
+    if (object.instances.size() != 1 || (object.config.has("solid_fixture") && object.config.get().opt_bool("solid_fixture")))
+        return false;
+    return std::any_of(object.volumes.begin(), object.volumes.end(), [](const ModelVolume *v) { return v->is_model_part(); });
+}
+
+// Orca: turns the selected object into a solid fixture. Its printed parts become negative volumes, which cut the
+// pocket, inside a new block that reaches the fixture margin past them on every side and the base thickness below
+// them, up to their top. The object's own solid_fixture setting switches the pocket on.
+void ObjectList::create_solid_fixture()
+{
+    if (! can_create_solid_fixture())
+        return;
+    const int    obj_idx = get_selected_obj_idx();
+    ModelObject &object  = *(*m_objects)[obj_idx];
+
+    const DynamicPrintConfig &print_config = wxGetApp().preset_bundle->prints.get_edited_preset().config;
+    auto setting = [&object, &print_config](const char *key) {
+        return object.config.has(key) ? object.config.get().opt_float(key) : print_config.opt_float(key);
+    };
+    const double margin = setting("solid_fixture_margin");
+    const double base   = setting("solid_fixture_base_thickness");
+
+    take_snapshot(_u8L("Create solid fixture"));
+    // The block is laid out square to the bed, so the instance's rotation and scale go into the parts first.
+    apply_object_instance_transfrom_to_all_volumes(&object);
+
+    BoundingBoxf3 parts;
+    for (ModelVolume *volume : object.volumes)
+        if (volume->is_model_part()) {
+            parts.merge(volume->mesh().transformed_bounding_box(volume->get_matrix()));
+            volume->set_type(ModelVolumeType::NEGATIVE_VOLUME);
+        }
+    const Vec3d size = parts.size();
+    TriangleMesh block = make_cube(size.x() + 2. * margin, size.y() + 2. * margin, size.z() + base);
+    block.translate(Vec3f(float(parts.min.x() - margin), float(parts.min.y() - margin), float(parts.min.z() - base)));
+    ModelVolume *block_volume = object.add_volume(std::move(block), ModelVolumeType::MODEL_PART);
+    block_volume->name        = into_u8(_L("Fixture block"));
+    block_volume->config.set_key_value("extruder", new ConfigOptionInt(object.config.has("extruder") ? object.config.opt_int("extruder") : 0));
+    block_volume->source.is_from_builtin_objects = true;
+    object.config.set_key_value("solid_fixture", new ConfigOptionBool(true));
+
+    // The block reaches below the parts, so the object drops by the base thickness to stand on the bed.
+    object.ensure_on_bed();
+    Slic3r::save_object_mesh(object);
+
+    select_item([this, obj_idx, block_volume]() {
+        wxDataViewItemArray items = reorder_volumes_and_get_selection(obj_idx, [block_volume](const ModelVolume *v) { return v == block_volume; });
+        return items.IsEmpty() ? wxDataViewItem(nullptr) : items.front();
+    });
+    add_settings_item(m_objects_model->GetItemById(obj_idx), &object.config.get());
+    wxGetApp().plater()->get_view3D_canvas3D()->update_instance_printable_state_for_object(size_t(obj_idx));
+    selection_changed();
+    notify_instance_updated(obj_idx);
+}
+
 // ORCA: kept as dead code (not called by any active path). Preserved in #if 0
 // form for traceability with upstream Bambu Studio -- removing outright would
 // produce merge conflicts on every BBL sync. The active "Change Type" UI goes

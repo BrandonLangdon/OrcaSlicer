@@ -3356,6 +3356,16 @@ void TabPrint::build()
         optgroup->append_single_option_line("support_ironing_flow", "support_settings_ironing#flow");
         optgroup->append_single_option_line("support_ironing_spacing", "support_settings_ironing#line-spacing");
 
+        optgroup = page->new_optgroup(L("Solid fixture"), L"param_support");
+        optgroup->append_single_option_line("solid_fixture");
+        optgroup->append_single_option_line("solid_fixture_clearance");
+        optgroup->append_single_option_line("solid_fixture_base_thickness");
+        optgroup->append_single_option_line("solid_fixture_margin");
+        optgroup->append_single_option_line("solid_fixture_mount_pattern");
+        optgroup->append_single_option_line("solid_fixture_mount_pitch_x");
+        optgroup->append_single_option_line("solid_fixture_mount_pitch_y");
+        optgroup->append_single_option_line("solid_fixture_mount_hole");
+
         //optgroup = page->new_optgroup(L("Options for support material and raft"));
 
         // Support

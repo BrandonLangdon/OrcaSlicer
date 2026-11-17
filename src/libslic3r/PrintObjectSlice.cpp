@@ -10,6 +10,7 @@
 #include <math.h>
 #include <cmath>
 #include <iterator>
+#include <tuple>
 #include <tbb/parallel_for.h>
 #include <vector>
 #include <utility>
@@ -269,6 +270,120 @@ static std::vector<VolumeSlices> slice_volumes_inner(
         }
 
     return out;
+}
+
+// Orca: the pitch along X and Y and the hole diameter of a solid fixture's mounting holes, in millimetres. The
+// diameters are clearance fits for the bolt or pin the workspace takes; no pattern has a zero pitch.
+static std::tuple<double, double, double> solid_fixture_mount_grid(const PrintObjectConfig &config)
+{
+    constexpr double inch = 25.4;
+    switch (config.solid_fixture_mount_pattern.value) {
+    case FixtureMountPattern::BreadboardM6:        return { 25., 25., 6.6 };
+    case FixtureMountPattern::BreadboardQuarter20: return { inch, inch, 6.8 };
+    case FixtureMountPattern::WeldingSystem16:     return { 50., 50., 16.2 };
+    case FixtureMountPattern::WeldingSystem22:     return { 100., 100., 22.2 };
+    case FixtureMountPattern::WeldingSystem28:     return { 100., 100., 28.2 };
+    case FixtureMountPattern::WeldingFiveEighths:  return { 2. * inch, 2. * inch, 16.1 };
+    case FixtureMountPattern::PegboardQuarter:     return { inch, inch, 6.6 };
+    case FixtureMountPattern::PegboardEighth:      return { inch, inch, 3.5 };
+    case FixtureMountPattern::TSlot20:             return { 20., 20., 5.5 };
+    case FixtureMountPattern::TSlot30:             return { 30., 30., 6.6 };
+    case FixtureMountPattern::TSlot40:             return { 40., 40., 9. };
+    case FixtureMountPattern::TSlot8020Series10:   return { inch, inch, 6.8 };
+    case FixtureMountPattern::TSlot8020Series15:   return { 1.5 * inch, 1.5 * inch, 8.4 };
+    case FixtureMountPattern::Custom:
+        return { config.solid_fixture_mount_pitch_x.value, config.solid_fixture_mount_pitch_y.value, config.solid_fixture_mount_hole.value };
+    case FixtureMountPattern::None: break;
+    }
+    return { 0., 0., 0. };
+}
+
+// Orca: the mounting holes of a solid fixture whose block stands on `footprint` and whose pockets reach out to
+// `pockets`: the grid centred on the footprint, less any hole that would come within `wall` of the block's edge or of
+// a pocket.
+static Polygons solid_fixture_mount_holes(const PrintObjectConfig &config, const ExPolygons &footprint, const Polygons &pockets)
+{
+    const auto [pitch_x, pitch_y, diameter] = solid_fixture_mount_grid(config);
+    if (pitch_x <= 0. || pitch_y <= 0. || diameter <= 0. || footprint.empty())
+        return {};
+    constexpr double wall   = 2.;
+    const BoundingBox box    = get_extents(footprint);
+    const Point       centre = box.center();
+    const coord_t     step_x = scaled<coord_t>(pitch_x), step_y = scaled<coord_t>(pitch_y);
+    const double      radius = 0.5 * diameter;
+    Polygons          holes;
+    for (coord_t y = centre.y() - ((centre.y() - box.min.y()) / step_y) * step_y; y <= box.max.y(); y += step_y)
+        for (coord_t x = centre.x() - ((centre.x() - box.min.x()) / step_x) * step_x; x <= box.max.x(); x += step_x) {
+            Polygon hole;
+            constexpr int segments = 64;
+            for (int i = 0; i < segments; ++ i) {
+                const double a = 2. * M_PI * i / segments;
+                hole.points.emplace_back(x + scaled<coord_t>(radius * std::cos(a)), y + scaled<coord_t>(radius * std::sin(a)));
+            }
+            const Polygons room = expand(hole, scaled<float>(wall));
+            if (diff(room, footprint).empty() && intersection(room, pockets).empty())
+                holes.emplace_back(std::move(hole));
+        }
+    return holes;
+}
+
+// Orca: cuts the pockets and mounting holes of a solid fixture into its printed parts. On each layer a negative volume
+// removes everything it covers at or below the layer's height plus the clearance, grown by the clearance, so the part
+// it stands for lifts straight out of the block. The mounting holes run through the block. Both are cut from every
+// printed part whatever the volumes' order, and the negative volumes are left empty so that the regions do not
+// subtract them again.
+static void cut_solid_fixture_pockets(std::vector<VolumeSlices> &volume_slices, const ModelVolumePtrs &model_volumes,
+                                      const std::vector<float> &zs, const PrintObjectConfig &config,
+                                      const std::function<void()> &throw_on_cancel_callback)
+{
+    const double clearance = config.solid_fixture_clearance.value;
+    auto volume = [&model_volumes](ObjectID id) {
+        auto it = std::find_if(model_volumes.begin(), model_volumes.end(), [id](const ModelVolume *mv) { return mv->id() == id; });
+        return it == model_volumes.end() ? nullptr : *it;
+    };
+    std::vector<Polygons> part(zs.size());
+    for (VolumeSlices &vs : volume_slices)
+        if (const ModelVolume *mv = volume(vs.volume_id); mv != nullptr && mv->is_negative_volume()) {
+            for (size_t i = 0; i < vs.slices.size() && i < zs.size(); ++ i)
+                polygons_append(part[i], to_polygons(std::move(vs.slices[i])));
+            vs.slices.assign(vs.slices.size(), ExPolygons());
+        }
+
+    // The pocket on each layer, which only ever grows going up.
+    std::vector<Polygons> pockets(zs.size());
+    Polygons below;
+    size_t   next = 0;
+    for (size_t i = 0; i < zs.size(); ++ i) {
+        throw_on_cancel_callback();
+        bool grew = false;
+        for (; next < zs.size() && zs[next] <= zs[i] + clearance + EPSILON; ++ next)
+            if (! part[next].empty()) {
+                polygons_append(below, std::move(part[next]));
+                grew = true;
+            }
+        if (grew) {
+            below      = union_(below);
+            pockets[i] = clearance > 0. ? expand(below, scaled<float>(clearance)) : below;
+        } else if (i > 0)
+            pockets[i] = pockets[i - 1];
+    }
+
+    // The block's footprint is its bottom layer.
+    ExPolygons footprint;
+    for (const VolumeSlices &vs : volume_slices)
+        if (const ModelVolume *mv = volume(vs.volume_id); mv != nullptr && mv->is_model_part() && ! vs.slices.empty())
+            append(footprint, vs.slices.front());
+    const Polygons holes = solid_fixture_mount_holes(config, union_ex(footprint), pockets.empty() ? Polygons() : pockets.back());
+
+    for (size_t i = 0; i < zs.size(); ++ i) {
+        Polygons cut = pockets[i];
+        append(cut, holes);
+        if (cut.empty())
+            continue;
+        for (VolumeSlices &vs : volume_slices)
+            if (const ModelVolume *mv = volume(vs.volume_id); mv != nullptr && mv->is_model_part() && i < vs.slices.size() && ! vs.slices[i].empty())
+                vs.slices[i] = diff_ex(vs.slices[i], cut);
+    }
 }
 
 static inline VolumeSlices& volume_slices_find_by_id(std::vector<VolumeSlices> &volume_slices, const ObjectID id)
@@ -1376,6 +1491,8 @@ void PrintObject::slice_volumes()
                 if (auto it = std::find_if(objSliceByVolume.begin(), objSliceByVolume.end(), [model_volume](const VolumeSlices &vs) { return vs.volume_id == model_volume->id(); });
                     it != objSliceByVolume.end())
                     it->slices = painted_modifier_segmentation(*this, *model_volume, it->slices, throw_on_cancel_callback);
+        if (this->config().solid_fixture)
+            cut_solid_fixture_pockets(objSliceByVolume, this->model_object()->volumes, slice_zs, this->config(), throw_on_cancel_callback);
     }
 
     //BBS: "model_part" volumes are grouded according to their connections

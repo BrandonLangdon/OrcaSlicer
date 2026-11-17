@@ -410,6 +410,25 @@ static t_config_enum_values s_keys_map_AdaptiveInfillGradient{
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(AdaptiveInfillGradient)
 
+static t_config_enum_values s_keys_map_FixtureMountPattern{
+    { "none",                  int(FixtureMountPattern::None) },
+    { "breadboard_m6",         int(FixtureMountPattern::BreadboardM6) },
+    { "breadboard_1/4-20",     int(FixtureMountPattern::BreadboardQuarter20) },
+    { "welding_system_16",     int(FixtureMountPattern::WeldingSystem16) },
+    { "welding_system_22",     int(FixtureMountPattern::WeldingSystem22) },
+    { "welding_system_28",     int(FixtureMountPattern::WeldingSystem28) },
+    { "welding_5/8",           int(FixtureMountPattern::WeldingFiveEighths) },
+    { "pegboard_1/4",          int(FixtureMountPattern::PegboardQuarter) },
+    { "pegboard_1/8",          int(FixtureMountPattern::PegboardEighth) },
+    { "tslot_20",              int(FixtureMountPattern::TSlot20) },
+    { "tslot_30",              int(FixtureMountPattern::TSlot30) },
+    { "tslot_40",              int(FixtureMountPattern::TSlot40) },
+    { "tslot_8020_10",         int(FixtureMountPattern::TSlot8020Series10) },
+    { "tslot_8020_15",         int(FixtureMountPattern::TSlot8020Series15) },
+    { "custom",                int(FixtureMountPattern::Custom) },
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(FixtureMountPattern)
+
 //BBS
 static t_config_enum_values s_keys_map_PrintSequence {
     { "by layer",     int(PrintSequence::ByLayer) },
@@ -7461,6 +7480,101 @@ void PrintConfigDef::init_fff_params()
 
     // BBS: change type to common float.
     // It may be rounded to mulitple layer height when independent_support_layer_height is false.
+    def           = this->add("solid_fixture", coBool);
+    def->label    = L("Solid fixture");
+    def->category = L("Support");
+    def->tooltip  = L("Prints the object as a solid fixture: a block that holds a part in a pocket shaped to it. The part is "
+                      "a negative volume, which is not printed and cuts the pocket from its underside up through the top of "
+                      "the block, so the part lifts straight out. Use \"Create solid fixture\" on an object to set one up.");
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionBool(false));
+
+    def           = this->add("solid_fixture_clearance", coFloat);
+    def->label    = L("Fixture clearance");
+    def->category = L("Support");
+    def->tooltip  = L("Gap between the part and the pocket of a solid fixture, around the part and below it.");
+    def->sidetext = L("mm");
+    def->min      = 0;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.2));
+
+    def           = this->add("solid_fixture_base_thickness", coFloat);
+    def->label    = L("Fixture base thickness");
+    def->category = L("Support");
+    def->tooltip  = L("Thickness of the floor below the lowest point of the part, used by \"Create solid fixture\" to place "
+                      "the part above the bottom of the block. To change it later, move the part in the block.");
+    def->sidetext = L("mm");
+    def->min      = 0;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(2));
+
+    def           = this->add("solid_fixture_margin", coFloat);
+    def->label    = L("Fixture margin");
+    def->category = L("Support");
+    def->tooltip  = L("Width of the block around the part, used by \"Create solid fixture\" to size the block. To change "
+                      "it later, resize the block.");
+    def->sidetext = L("mm");
+    def->min      = 0;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(5));
+
+    def           = this->add("solid_fixture_mount_pattern", coEnum);
+    def->label    = L("Mounting holes");
+    def->category = L("Support");
+    def->tooltip  = L("Through holes for bolting or pinning a solid fixture to a workspace, on the workspace's hole grid. "
+                      "The grid is centred on the block, and a hole is left out where it would come within 2 mm of the "
+                      "block's edge or of the pocket. The diameters are clearance fits for the bolt or pin; adjust printed "
+                      "holes with the hole size compensation.");
+    def->enum_keys_map = &ConfigOptionEnum<FixtureMountPattern>::get_enum_values();
+    for (const auto &[key, label] : std::initializer_list<std::pair<const char *, const char *>>{
+             { "none", L("None") },
+             { "breadboard_m6", L("Optical breadboard, M6 on 25 mm") },
+             { "breadboard_1/4-20", L("Optical breadboard, 1/4-20 on 1 in") },
+             { "welding_system_16", L("Welding table, 16 mm holes on 50 mm") },
+             { "welding_system_22", L("Welding table, 22 mm holes on 100 mm") },
+             { "welding_system_28", L("Welding table, 28 mm holes on 100 mm") },
+             { "welding_5/8", L("Welding table, 5/8 in holes on 2 in") },
+             { "pegboard_1/4", L("Pegboard, 1/4 in pegs on 1 in") },
+             { "pegboard_1/8", L("Pegboard, 1/8 in pegs on 1 in") },
+             { "tslot_20", L("T-slot extrusion 20 mm, M5") },
+             { "tslot_30", L("T-slot extrusion 30 mm, M6") },
+             { "tslot_40", L("T-slot extrusion 40 mm, M8") },
+             { "tslot_8020_10", L("T-slot extrusion 1 in, 1/4-20") },
+             { "tslot_8020_15", L("T-slot extrusion 1.5 in, 5/16-18") },
+             { "custom", L("Custom") } }) {
+        def->enum_values.push_back(key);
+        def->enum_labels.push_back(label);
+    }
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionEnum<FixtureMountPattern>(FixtureMountPattern::None));
+
+    def           = this->add("solid_fixture_mount_pitch_x", coFloat);
+    def->label    = L("Mounting hole pitch X");
+    def->category = L("Support");
+    def->tooltip  = L("Distance between custom mounting holes along X.");
+    def->sidetext = L("mm");
+    def->min      = 1;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(25));
+
+    def           = this->add("solid_fixture_mount_pitch_y", coFloat);
+    def->label    = L("Mounting hole pitch Y");
+    def->category = L("Support");
+    def->tooltip  = L("Distance between custom mounting holes along Y.");
+    def->sidetext = L("mm");
+    def->min      = 1;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(25));
+
+    def           = this->add("solid_fixture_mount_hole", coFloat);
+    def->label    = L("Mounting hole diameter");
+    def->category = L("Support");
+    def->tooltip  = L("Diameter of custom mounting holes.");
+    def->sidetext = L("mm");
+    def->min      = 0.5;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(6.6));
+
     def = this->add("support_top_z_distance", coFloat);
     //def->gui_type = ConfigOptionDef::GUIType::f_enum_open;
     def->label = L("Top Z distance");
