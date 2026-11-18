@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <algorithm>
@@ -112,4 +113,51 @@ TEST_CASE("A cube sliced for the F170 exports as a CMB job laid out like GrabCAD
     CHECK_THAT((x_max - x_min) * 25.4, WithinAbs(20. * 100. / 99.41 - 0.51, 0.02));
     // From the first layer to the last one's lift: the second base layer, the part, and the 0.06 in lift.
     CHECK_THAT(back.header.bounding_box.size().z() * 25.4, WithinAbs(0.254 + 20. * 100. / 99.51 + 25.4 * 0.06, 0.3));
+}
+
+TEST_CASE("A cube sliced with each F170 and F370 process exports as a CMB job at its slice height", "[CMB]")
+{
+    const auto [printer, process, machine, layer_height] = GENERATE(table<const char *, const char *, const char *, double>({
+        { "Stratasys F170 T14 model T14 support", "0.178mm Standard @Stratasys F170 T14-T14", "dorado1", 0.1778 },
+        { "Stratasys F170 T14 model T14 support", "0.330mm Standard @Stratasys F170 T14-T14", "dorado1", 0.3302 },
+        { "Stratasys F370 T14 model T14 support", "0.178mm Standard @Stratasys F370 T14-T14", "dorado3", 0.1778 },
+        { "Stratasys F370 T14 model T14 support", "0.254mm Standard @Stratasys F370 T14-T14", "dorado3", 0.254 },
+        { "Stratasys F370 T14 model T14 support", "0.330mm Standard @Stratasys F370 T14-T14", "dorado3", 0.3302 },
+    }));
+    CAPTURE(process);
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    apply_stratasys_preset(config, "machine", printer);
+    apply_stratasys_preset(config, "process", process);
+    Test::size_flush_to_nozzles(config);
+    config.set_deserialize_strict({
+        { "filament_diameter", "1.78,1.78" },
+        { "filament_notes", "\"CMB_MATERIAL=ABS\";\"CMB_MATERIAL=QSR\"" },
+        { "filament_is_support", "0,1" },
+        { "filament_soluble", "0,1" },
+        { "filament_shrink", "99.41%,100%" },
+        { "filament_shrinkage_compensation_z", "99.51%,100%" },
+        // The purge tower needs complete material presets on both heads, as in the F170 test above.
+        { "enable_prime_tower", "0" },
+    });
+    // A 20 mm cube near the middle of both printers' trays: the F170's 254 x 254 mm and the F370's 355 x 254 mm.
+    TriangleMesh cube(its_make_cube(20., 20., 20.));
+    cube.translate(117.f, 117.f, 0.f);
+    Print print;
+    Model model;
+    std::vector<TriangleMesh> meshes { cube };
+    Test::init_print(std::move(meshes), print, model, config, nullptr, /*arrange=*/false);
+    GCodeProcessorResult toolpaths;
+    Test::gcode(print, &toolpaths);
+
+    const CmbJob back = parse_cmb(serialize_cmb(cmb_job_from_toolpaths(toolpaths, cmb_export_settings(print.full_print_config(), "cube", 0))));
+    REQUIRE(back.opaque.writable);
+    CHECK(back.header.machine == machine);
+    REQUIRE(back.layers.size() > 2);
+    // Every job starts at 0.014 in; the layers above are a slice height apart, the support base first.
+    CHECK_THAT(back.layers.front().min.z(), WithinAbs(0.014, 1e-3));
+    CHECK_THAT((back.layers[2].min.z() - back.layers[1].min.z()) * 25.4, WithinAbs(layer_height, 0.01));
+    std::set<uint8_t> first_layer;
+    for (const CmbMove &move : back.layers.front().moves)
+        first_layer.insert(move.mode);
+    CHECK(first_layer.count(0xC9) == 1);
 }

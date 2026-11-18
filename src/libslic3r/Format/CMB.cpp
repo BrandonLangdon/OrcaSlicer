@@ -508,8 +508,6 @@ struct CmbMachine
 {
     const char            *id;
     std::array<uint8_t, 4> format;
-    // The last of the six floats after the shrink factors; its meaning is unknown.
-    float                  header_constant;
     // The F900 writes its support tip together with the support material, then three empty strings.
     bool                   support_tip_with_material;
     // F-series jobs print a support base under the part; Fortus jobs lay the part straight on the sheet.
@@ -517,17 +515,49 @@ struct CmbMachine
 };
 
 const CmbMachine CmbMachines[] = {
-    { "dorado1", { 0x0E, 0x09, 0x06, 0x01 }, 0.118f, false, true },
-    { "f900",    { 0x0E, 0x09, 0x09, 0x01 }, 0.068f, true,  false },
+    // F170, F370.
+    { "dorado1", { 0x0E, 0x09, 0x06, 0x01 }, false, true },
+    { "dorado3", { 0x0E, 0x09, 0x06, 0x01 }, false, true },
+    { "f900",    { 0x0E, 0x09, 0x09, 0x01 }, true,  false },
+};
+
+// What GrabCAD Print writes for a model tip at a slice height: the last of the six floats after the shrink factors,
+// whose meaning is unknown, and the quality name. Each row comes from GrabCAD Print's jobs for the machine; a job at
+// any other tip and slice height is refused. The F370's 0.005 in jobs are left out as they lay no support base. The
+// F170's 0.007 and 0.013 in rows are the F370's: the two printers' jobs match wherever both have been seen, and the
+// F170 holds parameter sets for both slice heights.
+struct CmbSliceStyle
+{
+    const char *machine;
+    const char *model_tip;
+    // Inches.
+    double      slice;
+    float       header_constant;
+    const char *quality;
+};
+
+const CmbSliceStyle CmbSliceStyles[] = {
+    { "dorado1", "T14", 0.007, 0.105f, "normal" },
+    { "dorado1", "T14", 0.010, 0.118f, "normal" },
+    { "dorado1", "T14", 0.013, 0.119f, "none" },
+    { "dorado3", "T14", 0.007, 0.105f, "normal" },
+    { "dorado3", "T14", 0.010, 0.118f, "normal" },
+    { "dorado3", "T14", 0.013, 0.119f, "none" },
+    { "f900",    "T10", 0.005, 0.063f, "none" },
+    { "f900",    "T12", 0.007, 0.063f, "none" },
+    { "f900",    "T16", 0.010, 0.068f, "none" },
+    { "f900",    "T20", 0.013, 0.067f, "none" },
 };
 
 // Every job has its first layer this high, in inches, whatever its slice height.
 constexpr double FirstLayerZ = 0.014;
 // The head rises this far, in inches, plus a slice height, between paths. GrabCAD Print also writes lower lifts.
 constexpr double LiftHeight  = 0.05;
-// The narrowest and widest beads, as multiples of the slice height, seen in GrabCAD Print jobs for the F170.
+// The narrowest bead, as a multiple of the slice height, and the widest, in inches, seen in GrabCAD Print's jobs. A
+// bead's width is its area over the slice height, so the thick first layer counts as a wide bead: at thin slices
+// GrabCAD Print's widest are many times the slice height, up to 0.084 in on the first layer at 0.005 in.
 constexpr double MinBeadAspect = 0.5;
-constexpr double MaxBeadAspect = 5.0;
+constexpr double MaxBeadWidth  = 0.084;
 
 // The deposition mode a toolpath of `role` on `head` (0 model, 1 support) is laid in, as GrabCAD Print jobs for the
 // machine lay it.
@@ -661,6 +691,13 @@ CmbJob cmb_job_from_toolpaths(const GCodeProcessorResult &toolpaths, const CmbEx
 
     const double slice = settings.layer_height / MmPerInch;
     const double lift  = LiftHeight + slice;
+    const CmbSliceStyle *style = nullptr;
+    for (const CmbSliceStyle &s : CmbSliceStyles)
+        if (settings.machine == s.machine && settings.model_tip == s.model_tip && std::abs(slice - s.slice) < 0.0002)
+            style = &s;
+    if (style == nullptr)
+        refuse(format(_u8L("Orca has no GrabCAD Print job for the %1% tip at %2% mm layers on this machine to lay the job out by."),
+                      settings.model_tip, settings.layer_height));
 
     // The toolpaths grouped into layers and paths, in inches. A path runs while the same head extrudes in one mode
     // without leaving the point it reached.
@@ -764,9 +801,8 @@ CmbJob cmb_job_from_toolpaths(const GCodeProcessorResult &toolpaths, const CmbEx
             }
             tower |= path.tower;
             for (float a : path.areas) {
-                const double aspect = a / slice / slice;
-                if (aspect > MaxBeadAspect)
-                    refuse(format(_u8L("a bead is %1% times as wide as the layer is thick, and Stratasys jobs keep it under %2%."), aspect, MaxBeadAspect));
+                if (a / slice > MaxBeadWidth + 1e-4)
+                    refuse(format(_u8L("a bead is %1% mm wide, and Stratasys jobs keep them under %2% mm."), a / slice * MmPerInch, MaxBeadWidth * MmPerInch));
                 area_min[path.head] = std::min(area_min[path.head], a);
                 area_max[path.head] = std::max(area_max[path.head], a);
             }
@@ -844,7 +880,7 @@ CmbJob cmb_job_from_toolpaths(const GCodeProcessorResult &toolpaths, const CmbEx
     Writer tail;
     tail.str("none");
     tail.str(random_uuid());
-    tail.str("normal");
+    tail.str(style->quality);
     for (uint8_t b : tower ? std::array<uint8_t, 7> { 2, 0, 0, 0, 2, 0, 0 } : std::array<uint8_t, 7> {})
         tail.byte(b);
     Writer sections;
@@ -878,7 +914,7 @@ CmbJob cmb_job_from_toolpaths(const GCodeProcessorResult &toolpaths, const CmbEx
     tail.i32(0);
     tail.i32(thumbnail);
     tail.str("not specified");
-    for (float f : { settings.shrink.x(), settings.shrink.y(), settings.shrink.z(), 0.f, 0.f, machine->header_constant })
+    for (float f : { settings.shrink.x(), settings.shrink.y(), settings.shrink.z(), 0.f, 0.f, style->header_constant })
         tail.f32(f);
     tail.str(settings.model_tip);
     if (machine->support_tip_with_material) {

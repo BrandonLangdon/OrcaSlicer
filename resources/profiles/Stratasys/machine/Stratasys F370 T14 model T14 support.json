@@ -1,0 +1,36 @@
+{
+	"type": "machine",
+	"name": "Stratasys F370 T14 model T14 support",
+	"inherits": "fdm_machine_common",
+	"from": "system",
+	"setting_id": "RX7ROoS512cMAveX",
+	"instantiation": "true",
+	"printer_model": "Stratasys F370",
+	"printer_variant": "0.356",
+	"nozzle_diameter": [
+		"0.356",
+		"0.356"
+	],
+	"min_layer_height": [
+		"0.1778",
+		"0.1778"
+	],
+	"max_layer_height": [
+		"0.3302",
+		"0.3302"
+	],
+	"printable_area": [
+		"0x0",
+		"355x0",
+		"355x254",
+		"0x254"
+	],
+	"printable_height": "355",
+	"default_print_profile": "0.254mm Standard @Stratasys F370 T14-T14",
+	"output_file_format": "cmb.gz",
+	"printer_notes": "PRINTER_VENDOR_STRATASYS\nCMB_MACHINE=dorado3\nCMB_MODEL_TIP=T14\nCMB_SUPPORT_TIP=T14",
+	"default_filament_profile": [
+		"Stratasys ABS @F370",
+		"Stratasys QSR Support @F370"
+	]
+}

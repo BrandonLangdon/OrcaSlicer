@@ -1,0 +1,24 @@
+{
+	"type": "process",
+	"name": "0.330mm Standard @Stratasys F170 T14-T14",
+	"inherits": "fdm_process_stratasys_common",
+	"from": "system",
+	"setting_id": "urXzwSJckUjKqLvk",
+	"instantiation": "true",
+	"layer_height": "0.3302",
+	"initial_layer_print_height": "0.3556",
+	"line_width": "0.66",
+	"outer_wall_line_width": "0.66",
+	"inner_wall_line_width": "0.66",
+	"initial_layer_line_width": "0.51",
+	"top_surface_line_width": "0.56",
+	"internal_solid_infill_line_width": "0.56",
+	"sparse_infill_line_width": "0.56",
+	"support_line_width": "0.41",
+	"enable_prime_tower": "1",
+	"raft_layers": "2",
+	"raft_contact_distance": "0",
+	"compatible_printers": [
+		"Stratasys F170 T14 model T14 support"
+	]
+}
