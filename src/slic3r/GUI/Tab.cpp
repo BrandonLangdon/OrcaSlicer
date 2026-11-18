@@ -3361,6 +3361,8 @@ void TabPrint::build()
         optgroup->append_single_option_line("solid_fixture_clearance");
         optgroup->append_single_option_line("solid_fixture_base_thickness");
         optgroup->append_single_option_line("solid_fixture_margin");
+        optgroup->append_single_option_line("solid_fixture_wall_thickness");
+        optgroup->append_single_option_line("solid_fixture_wall_height");
         optgroup->append_single_option_line("solid_fixture_mount_pattern");
         optgroup->append_single_option_line("solid_fixture_mount_pitch_x");
         optgroup->append_single_option_line("solid_fixture_mount_pitch_y");

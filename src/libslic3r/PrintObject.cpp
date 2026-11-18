@@ -1580,6 +1580,10 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "interlocking_beam_width"
             || opt_key == "solid_fixture"
             || opt_key == "solid_fixture_clearance"
+            || opt_key == "solid_fixture_base_thickness"
+            || opt_key == "solid_fixture_margin"
+            || opt_key == "solid_fixture_wall_thickness"
+            || opt_key == "solid_fixture_wall_height"
             || opt_key == "solid_fixture_mount_pattern"
             || opt_key == "solid_fixture_mount_pitch_x"
             || opt_key == "solid_fixture_mount_pitch_y"
@@ -1895,8 +1899,6 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "belt_purge_tower_object") {
             invalidated |= m_print->invalidate_step(psWipeTower);
             invalidated |= m_print->invalidate_step(psGCodeExport);
-        } else if (opt_key == "solid_fixture_base_thickness" || opt_key == "solid_fixture_margin") {
-            // Orca: only read when a solid fixture is created, which changes the model.
         } else {
             // for legacy, if we can't handle this option let's invalidate all steps
             this->invalidate_all_steps();

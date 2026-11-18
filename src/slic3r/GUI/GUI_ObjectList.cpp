@@ -5896,8 +5896,9 @@ bool ObjectList::can_create_solid_fixture() const
 }
 
 // Orca: turns the selected object into a solid fixture. Its printed parts become negative volumes, which cut the
-// pocket, inside a new block that reaches the fixture margin past them on every side and the base thickness below
-// them, up to their top. The object's own solid_fixture setting switches the pocket on.
+// pocket, inside a new block reaching the base thickness below them and up to their top. The block bounds the
+// fixture's base, so it reaches past the locating wall by the fixture margin, or with a mounting pattern by far enough
+// for a tab to reach a grid hole on every side. The object's own solid_fixture setting switches the fixture on.
 void ObjectList::create_solid_fixture()
 {
     if (! can_create_solid_fixture())
@@ -5909,8 +5910,16 @@ void ObjectList::create_solid_fixture()
     auto setting = [&object, &print_config](const char *key) {
         return object.config.has(key) ? object.config.get().opt_float(key) : print_config.opt_float(key);
     };
-    const double margin = setting("solid_fixture_margin");
-    const double base   = setting("solid_fixture_base_thickness");
+    const double base = setting("solid_fixture_base_thickness");
+    const auto *pattern = object.config.has("solid_fixture_mount_pattern") ?
+                              object.config.get().option<ConfigOptionEnum<FixtureMountPattern>>("solid_fixture_mount_pattern") :
+                              print_config.option<ConfigOptionEnum<FixtureMountPattern>>("solid_fixture_mount_pattern");
+    const auto [pitch_x, pitch_y, hole] = fixture_mount_grid(pattern ? pattern->value : FixtureMountPattern::None, setting("solid_fixture_mount_pitch_x"),
+                                                             setting("solid_fixture_mount_pitch_y"), setting("solid_fixture_mount_hole"));
+    // A grid hole lies within a pitch of the wall; it keeps 2 mm clear of the wall and of the block's edge.
+    const double reach  = hole > 0. ? std::max(pitch_x, pitch_y) + 2. * (0.5 * hole + 2.) : 0.;
+    const double margin = setting("solid_fixture_clearance") + setting("solid_fixture_wall_thickness") +
+                          std::max(setting("solid_fixture_margin"), reach);
 
     take_snapshot(_u8L("Create solid fixture"));
     // The block is laid out square to the bed, so the instance's rotation and scale go into the parts first.

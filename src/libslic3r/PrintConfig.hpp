@@ -23,6 +23,7 @@
 #include "Polygon.hpp"
 #include <boost/container_hash/hash.hpp>
 #include <algorithm>
+#include <array>
 #include <boost/preprocessor/facilities/empty.hpp>
 #include <boost/preprocessor/punctuation/comma_if.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
@@ -331,6 +332,11 @@ enum class FixtureMountPattern {
     TSlot8020Series15,
     Custom,
 };
+
+// Orca: the pitch along X, the pitch along Y and the hole diameter of a mounting pattern, in millimetres, the custom
+// values for FixtureMountPattern::Custom; all zero for no pattern. The diameters are clearance fits for the bolt or
+// pin the workspace takes.
+std::array<double, 3> fixture_mount_grid(FixtureMountPattern pattern, double custom_pitch_x, double custom_pitch_y, double custom_hole);
 
 enum class AdaptiveInfillGradient {
     Linear,
@@ -1360,6 +1366,8 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionFloat,               solid_fixture_clearance))
     ((ConfigOptionFloat,               solid_fixture_base_thickness))
     ((ConfigOptionFloat,               solid_fixture_margin))
+    ((ConfigOptionFloat,               solid_fixture_wall_thickness))
+    ((ConfigOptionFloat,               solid_fixture_wall_height))
     ((ConfigOptionEnum<FixtureMountPattern>, solid_fixture_mount_pattern))
     ((ConfigOptionFloat,               solid_fixture_mount_pitch_x))
     ((ConfigOptionFloat,               solid_fixture_mount_pitch_y))

@@ -10,6 +10,7 @@
 #include <limits>
 #include <math.h>
 #include <utility>
+#include <vector>
 
 #include "libslic3r/ClipperUtils.hpp"
 #include "libslic3r/Config.hpp"
@@ -27,74 +28,23 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-// A 30 x 30 x 20 mm block holding a stepped part: a 10 mm square from 5 to 10 mm, under a 4 mm square from 10 to 15 mm.
-// The part's wide step overhangs its narrow top, so a pocket that only followed the part would close over the step
-// and trap it. The part is created before or after the block, which sets the volumes' order.
-Print &stepped_part_in_block(Print &print, Model &model, bool fixture, bool part_first)
+// A solid fixture made of a `block` x `block` x 20 mm block and the part `pieces` make up, sliced at 0.2 mm with a 0.2 mm
+// clearance and the settings `items` add. The part is created before or after the block, which sets the volumes'
+// order.
+Print &fixture(Print &print, Model &model, double block, std::vector<TriangleMesh> pieces,
+               std::initializer_list<ConfigBase::SetDeserializeItem> items, bool part_first = false)
 {
     ModelObject *object = model.add_object();
     object->name        = "fixture.stl";
-    auto add_part = [object]() {
-        TriangleMesh wide = make_cube(10., 10., 5.);
-        wide.translate(10.f, 10.f, 5.f);
-        object->add_volume(std::move(wide), ModelVolumeType::NEGATIVE_VOLUME, false);
-        TriangleMesh narrow = make_cube(4., 4., 5.);
-        narrow.translate(13.f, 13.f, 10.f);
-        object->add_volume(std::move(narrow), ModelVolumeType::NEGATIVE_VOLUME, false);
+    auto add_part = [object, &pieces]() {
+        for (TriangleMesh &piece : pieces)
+            object->add_volume(std::move(piece), ModelVolumeType::NEGATIVE_VOLUME, false);
     };
     if (part_first)
         add_part();
-    object->add_volume(make_cube(30., 30., 20.), ModelVolumeType::MODEL_PART, false);
+    object->add_volume(make_cube(block, block, 20.), ModelVolumeType::MODEL_PART, false);
     if (! part_first)
         add_part();
-    object->add_instance();
-    object->ensure_on_bed();
-
-    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
-    config.set_deserialize_strict({
-        { "layer_height", 0.2 },
-        { "initial_layer_print_height", 0.2 },
-        { "solid_fixture", fixture ? 1 : 0 },
-        { "solid_fixture_clearance", 0.2 },
-    });
-    print.auto_assign_extruders(object);
-    print.apply(model, config);
-    print.validate();
-    print.set_status_silent();
-    print.process();
-    return print;
-}
-
-// The printed area of the layer printed at `z`, in square millimetres.
-double area_at(const Print &print, double z)
-{
-    const Layer *nearest = nullptr;
-    for (const Layer *layer : print.objects().front()->layers())
-        if (nearest == nullptr || std::abs(layer->print_z - z) < std::abs(nearest->print_z - z))
-            nearest = layer;
-    REQUIRE(nearest != nullptr);
-    double area = 0.;
-    for (const ExPolygon &expolygon : nearest->lslices)
-        area += expolygon.area();
-    return area * SCALING_FACTOR * SCALING_FACTOR;
-}
-
-// The block less a square of `side` grown by the 0.2 mm clearance, with its rounded corners.
-double block_less(double side)
-{
-    const double clearance = 0.2;
-    return 30. * 30. - (side * side + 4. * side * clearance + M_PI * clearance * clearance);
-}
-
-// A 10 mm cube 5 mm up in the middle of an 80 x 80 x 20 mm solid fixture, with the mounting holes `mount` sets.
-Print &centred_part_in_block(Print &print, Model &model, std::initializer_list<ConfigBase::SetDeserializeItem> mount)
-{
-    ModelObject *object = model.add_object();
-    object->name        = "fixture.stl";
-    object->add_volume(make_cube(80., 80., 20.), ModelVolumeType::MODEL_PART, false);
-    TriangleMesh part = make_cube(10., 10., 10.);
-    part.translate(35.f, 35.f, 5.f);
-    object->add_volume(std::move(part), ModelVolumeType::NEGATIVE_VOLUME, false);
     object->add_instance();
     object->ensure_on_bed();
 
@@ -105,7 +55,7 @@ Print &centred_part_in_block(Print &print, Model &model, std::initializer_list<C
         { "solid_fixture", 1 },
         { "solid_fixture_clearance", 0.2 },
     });
-    config.set_deserialize_strict(mount);
+    config.set_deserialize_strict(items);
     print.auto_assign_extruders(object);
     print.apply(model, config);
     print.validate();
@@ -114,19 +64,54 @@ Print &centred_part_in_block(Print &print, Model &model, std::initializer_list<C
     return print;
 }
 
-// The holes in the layer printed at `z`.
-size_t holes_at(const Print &print, double z)
+TriangleMesh cube_at(double size_x, double size_y, double size_z, double x, double y, double z)
+{
+    TriangleMesh cube = make_cube(size_x, size_y, size_z);
+    cube.translate(float(x), float(y), float(z));
+    return cube;
+}
+
+// A stepped part in a 30 mm block: a 10 mm square from 5 to 10 mm, under a 4 mm square from 10 to 15 mm. The wide step
+// overhangs the narrow top, so a pocket that only followed the part would close over the step and trap it.
+std::vector<TriangleMesh> stepped_part()
+{
+    return { cube_at(10., 10., 5., 10., 10., 5.), cube_at(4., 4., 5., 13., 13., 10.) };
+}
+
+// A 10 mm cube 5 mm up in the middle of an 80 mm block.
+std::vector<TriangleMesh> centred_cube() { return { cube_at(10., 10., 10., 35., 35., 5.) }; }
+
+// The layer printed nearest `z`.
+const Layer &layer_at(const Print &print, double z)
 {
     const Layer *nearest = nullptr;
     for (const Layer *layer : print.objects().front()->layers())
         if (nearest == nullptr || std::abs(layer->print_z - z) < std::abs(nearest->print_z - z))
             nearest = layer;
     REQUIRE(nearest != nullptr);
+    return *nearest;
+}
+
+// The printed area of the layer printed at `z`, in square millimetres.
+double area_at(const Print &print, double z)
+{
+    double area = 0.;
+    for (const ExPolygon &expolygon : layer_at(print, z).lslices)
+        area += expolygon.area();
+    return area * SCALING_FACTOR * SCALING_FACTOR;
+}
+
+// The holes in the layer printed at `z`.
+size_t holes_at(const Print &print, double z)
+{
     size_t holes = 0;
-    for (const ExPolygon &expolygon : nearest->lslices)
+    for (const ExPolygon &expolygon : layer_at(print, z).lslices)
         holes += expolygon.holes.size();
     return holes;
 }
+
+// A square of `side` grown by `by`, its corners kept square.
+double grown_square(double side, double by) { return (side + 2. * by) * (side + 2. * by); }
 
 } // namespace
 
@@ -136,54 +121,87 @@ TEST_CASE("A solid fixture's pocket rises from the part's underside through the 
     CAPTURE(part_first);
     Print print;
     Model model;
-    stepped_part_in_block(print, model, true, part_first);
+    // A wall wide and tall enough to fill the block, so only the pocket is cut from it.
+    fixture(print, model, 30., stepped_part(), { { "solid_fixture_wall_thickness", 40 }, { "solid_fixture_wall_height", 100 } }, part_first);
 
     // Under the part, more than the clearance below it, the block is solid: the floor the part rests on.
     CHECK_THAT(area_at(print, 4.), WithinAbs(30. * 30., 1.));
     // Beside the wide step, the pocket is the step and its clearance.
-    CHECK_THAT(area_at(print, 7.), WithinAbs(block_less(10.), 1.));
+    CHECK_THAT(area_at(print, 7.), WithinAbs(30. * 30. - grown_square(10., 0.2), 1.));
     // Beside the narrow top and above the part, the pocket stays as wide as the step, so the part lifts out.
-    CHECK_THAT(area_at(print, 12.), WithinAbs(block_less(10.), 1.));
-    CHECK_THAT(area_at(print, 18.), WithinAbs(block_less(10.), 1.));
+    CHECK_THAT(area_at(print, 12.), WithinAbs(30. * 30. - grown_square(10., 0.2), 1.));
+    CHECK_THAT(area_at(print, 18.), WithinAbs(30. * 30. - grown_square(10., 0.2), 1.));
 }
 
 TEST_CASE("Negative volumes outside a solid fixture cut only their own shape", "[SolidFixture]")
 {
     Print print;
     Model model;
-    stepped_part_in_block(print, model, false, false);
+    fixture(print, model, 30., stepped_part(), { { "solid_fixture", 0 } });
 
     // The ordinary negative volume: the narrow top's hole, with no clearance, and nothing above the part.
     CHECK_THAT(area_at(print, 12.), WithinAbs(30. * 30. - 4. * 4., 1.));
     CHECK_THAT(area_at(print, 18.), WithinAbs(30. * 30., 1.));
 }
 
-TEST_CASE("A solid fixture's mounting holes run through the block on the workspace's grid", "[SolidFixture]")
+TEST_CASE("A solid fixture is a thin base and a locating wall, not a solid block", "[SolidFixture]")
 {
-    // The M6 breadboard's 25 mm grid, centred on the 80 mm block, falls at 15, 40 and 65 mm each way: nine holes, less
-    // the middle one in the pocket. The 30 x 20 mm custom grid falls at 10, 40 and 70 mm by 0, 20, 40, 60 and 80 mm,
-    // and keeps the 8 of them that are clear of the block's edge and the pocket.
-    const auto [pattern, diameter] = GENERATE(table<const char *, double>({ { "breadboard_m6", 6.6 }, { "custom", 5. } }));
+    // A 10 mm cube 5 mm up, on a 2 mm base with a 4 mm margin round a 2 mm wall 5 mm high: the wall reaches 10 mm.
+    Print print;
+    Model model;
+    fixture(print, model, 80., centred_cube(),
+            { { "solid_fixture_base_thickness", 2 }, { "solid_fixture_margin", 4 }, { "solid_fixture_wall_thickness", 2 },
+              { "solid_fixture_wall_height", 5 }, { "solid_fixture_mount_pattern", "none" } });
+
+    // The base reaches the clearance, the wall and the margin past the part, not the 80 mm block.
+    CHECK_THAT(area_at(print, 1.), WithinRel(grown_square(10., 0.2 + 2. + 4.), 0.01));
+    // Below the part, the wall's whole footprint holds the part up.
+    CHECK_THAT(area_at(print, 3.6), WithinRel(grown_square(10., 0.2 + 2.), 0.01));
+    // Beside the part, the wall is a ring round the pocket.
+    CHECK_THAT(area_at(print, 8.), WithinRel(grown_square(10., 0.2 + 2.) - grown_square(10., 0.2), 0.02));
+    // Nothing is printed above the wall: the cube's flat underside needs no cradle there.
+    CHECK_THAT(print.objects().front()->layers().back()->print_z, WithinAbs(10., 0.21));
+}
+
+TEST_CASE("A solid fixture's cradle holds up an overhanging underside above the wall", "[SolidFixture]")
+{
+    // A T: a 4 mm stem from 5 to 10 mm under a 10 mm cap from 10 to 15 mm. The wall stops 2 mm up the stem, at 7 mm.
+    Print print;
+    Model model;
+    fixture(print, model, 30., { cube_at(4., 4., 5., 13., 13., 5.), cube_at(10., 10., 5., 10., 10., 10.) },
+            { { "solid_fixture_wall_height", 2 }, { "solid_fixture_mount_pattern", "none" } });
+
+    // Above the wall and under the cap, the cradle fills the cap's outline round the stem's pocket.
+    CHECK_THAT(area_at(print, 8.5), WithinRel(10. * 10. - grown_square(4., 0.2), 0.02));
+}
+
+TEST_CASE("A solid fixture's base reaches out in tabs to the nearest mounting hole on each side", "[SolidFixture]")
+{
+    // The M6 breadboard's 25 mm grid, centred on the 80 mm block, falls at 15, 40 and 65 mm each way; the 30 x 20 mm
+    // custom grid at 10, 40 and 70 mm by 0, 20, 40, 60 and 80 mm. Either way the nearest hole on each side of the part,
+    // clear of its wall, is 20 to 30 mm out, past the base's 7.2 mm flange: one tab and one hole on each side.
+    const char *pattern = GENERATE("breadboard_m6", "custom");
     CAPTURE(pattern);
     Print print;
     Model model;
-    centred_part_in_block(print, model, { { "solid_fixture_mount_pattern", pattern },
-                                          { "solid_fixture_mount_pitch_x", 30 },
-                                          { "solid_fixture_mount_pitch_y", 20 },
-                                          { "solid_fixture_mount_hole", 5 } });
+    fixture(print, model, 80., centred_cube(),
+            { { "solid_fixture_base_thickness", 2 }, { "solid_fixture_margin", 5 }, { "solid_fixture_wall_thickness", 2 },
+              { "solid_fixture_wall_height", 5 }, { "solid_fixture_mount_pattern", pattern }, { "solid_fixture_mount_pitch_x", 30 },
+              { "solid_fixture_mount_pitch_y", 20 }, { "solid_fixture_mount_hole", 5 } });
 
-    // Under the part the floor holds only the mounting holes; above it they surround the pocket.
-    CHECK(holes_at(print, 2.) == 8);
-    CHECK(holes_at(print, 18.) == 9);
-    // Each hole is the full diameter: the floor is the block less 8 of them.
-    const double hole_area = M_PI * 0.25 * diameter * diameter;
-    CHECK_THAT(area_at(print, 2.), WithinRel(80. * 80. - 8. * hole_area, 0.002));
+    // The base is one piece, its four tabs joined to the flange, each with its hole.
+    REQUIRE(layer_at(print, 1.).lslices.size() == 1);
+    CHECK(holes_at(print, 1.) == 4);
+    // Most of the block is left empty.
+    CHECK(area_at(print, 1.) < 0.5 * 80. * 80.);
+    // Above the base only the wall is printed, round the pocket: no mounting holes there.
+    CHECK(holes_at(print, 8.) == 1);
 }
 
 TEST_CASE("A solid fixture has no mounting holes unless a pattern is chosen", "[SolidFixture]")
 {
     Print print;
     Model model;
-    centred_part_in_block(print, model, { { "solid_fixture_mount_pattern", "none" } });
-    CHECK(holes_at(print, 2.) == 0);
+    fixture(print, model, 80., centred_cube(), { { "solid_fixture_mount_pattern", "none" } });
+    CHECK(holes_at(print, 1.) == 0);
 }

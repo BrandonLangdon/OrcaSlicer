@@ -16,6 +16,7 @@
 #include "GCode/Thumbnails.hpp"
 #include <algorithm>
 #include <cctype>
+#include <array>
 #include <cmath>
 #include <initializer_list>
 #include <iterator>
@@ -429,6 +430,30 @@ static t_config_enum_values s_keys_map_FixtureMountPattern{
     { "custom",                int(FixtureMountPattern::Custom) },
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(FixtureMountPattern)
+
+std::array<double, 3> fixture_mount_grid(FixtureMountPattern pattern, double custom_pitch_x, double custom_pitch_y, double custom_hole)
+{
+    constexpr double inch = 25.4;
+    switch (pattern) {
+    case FixtureMountPattern::BreadboardM6:        return { 25., 25., 6.6 };
+    case FixtureMountPattern::BreadboardQuarter20: return { inch, inch, 6.8 };
+    case FixtureMountPattern::WeldingSystem16:     return { 50., 50., 16.2 };
+    case FixtureMountPattern::WeldingSystem22:     return { 100., 100., 22.2 };
+    case FixtureMountPattern::WeldingSystem28:     return { 100., 100., 28.2 };
+    case FixtureMountPattern::WeldingFiveEighths:  return { 2. * inch, 2. * inch, 16.1 };
+    case FixtureMountPattern::PegboardQuarter:     return { inch, inch, 6.6 };
+    case FixtureMountPattern::PegboardEighth:      return { inch, inch, 3.5 };
+    case FixtureMountPattern::TSlot20:             return { 20., 20., 5.5 };
+    case FixtureMountPattern::TSlot30:             return { 30., 30., 6.6 };
+    case FixtureMountPattern::TSlot40:             return { 40., 40., 9. };
+    case FixtureMountPattern::TSlot8020Series10:   return { inch, inch, 6.8 };
+    case FixtureMountPattern::TSlot8020Series15:   return { 1.5 * inch, 1.5 * inch, 8.4 };
+    case FixtureMountPattern::Custom:
+        return { custom_pitch_x, custom_pitch_y, custom_hole };
+    case FixtureMountPattern::None: break;
+    }
+    return { 0., 0., 0. };
+}
 
 //BBS
 static t_config_enum_values s_keys_map_PrintSequence {
@@ -7502,8 +7527,9 @@ void PrintConfigDef::init_fff_params()
     def           = this->add("solid_fixture_base_thickness", coFloat);
     def->label    = L("Fixture base thickness");
     def->category = L("Support");
-    def->tooltip  = L("Thickness of the floor below the lowest point of the part, used by \"Create solid fixture\" to place "
-                      "the part above the bottom of the block. To change it later, move the part in the block.");
+    def->tooltip  = L("Thickness of the base the fixture stands on. Above it, the fixture is only a locating wall around the "
+                      "part and a cradle under it. \"Create solid fixture\" also places the part this high above the bottom "
+                      "of the block.");
     def->sidetext = L("mm");
     def->min      = 0;
     def->mode     = comAdvanced;
@@ -7512,8 +7538,27 @@ void PrintConfigDef::init_fff_params()
     def           = this->add("solid_fixture_margin", coFloat);
     def->label    = L("Fixture margin");
     def->category = L("Support");
-    def->tooltip  = L("Width of the block around the part, used by \"Create solid fixture\" to size the block. To change "
-                      "it later, resize the block.");
+    def->tooltip  = L("Width of the base around the locating wall. The block the fixture is made from bounds it, and "
+                      "\"Create solid fixture\" sizes the block to leave room for it.");
+    def->sidetext = L("mm");
+    def->min      = 0;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(5));
+
+    def           = this->add("solid_fixture_wall_thickness", coFloat);
+    def->label    = L("Fixture wall thickness");
+    def->category = L("Support");
+    def->tooltip  = L("Thickness of the wall around the part's outline that holds it in place sideways.");
+    def->sidetext = L("mm");
+    def->min      = 0;
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(2));
+
+    def           = this->add("solid_fixture_wall_height", coFloat);
+    def->label    = L("Fixture wall height");
+    def->category = L("Support");
+    def->tooltip  = L("How far the locating wall rises above the part's lowest point. Set to 0 for no wall: the part then "
+                      "only rests in the cradle shaped to its underside.");
     def->sidetext = L("mm");
     def->min      = 0;
     def->mode     = comAdvanced;
@@ -7524,8 +7569,9 @@ void PrintConfigDef::init_fff_params()
     def->category = L("Support");
     def->tooltip  = L("Through holes for bolting or pinning a solid fixture to a workspace, on the workspace's hole grid. "
                       "The grid is centred on the block, and a hole is left out where it would come within 2 mm of the "
-                      "block's edge or of the pocket. The diameters are clearance fits for the bolt or pin; adjust printed "
-                      "holes with the hole size compensation.");
+                      "block's edge or of the locating wall. The base reaches out in a tab to the nearest hole on each side "
+                      "of the part. The diameters are clearance fits for the bolt or pin; adjust printed holes with the "
+                      "hole size compensation.");
     def->enum_keys_map = &ConfigOptionEnum<FixtureMountPattern>::get_enum_values();
     for (const auto &[key, label] : std::initializer_list<std::pair<const char *, const char *>>{
              { "none", L("None") },
