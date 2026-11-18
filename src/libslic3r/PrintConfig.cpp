@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <initializer_list>
 #include <iterator>
 #include "enum_bitmask.hpp"
 #include <numeric>
