@@ -22034,6 +22034,10 @@ void Plater::on_config_change(const DynamicPrintConfig &config)
         new_nozzle_size = opt_new->values.size();
     }
 
+    // Orca: a solid fixture's settings may need larger blocks.
+    if (std::any_of(diff_keys.begin(), diff_keys.end(), [](const std::string &key) { return boost::starts_with(key, "solid_fixture"); }))
+        wxGetApp().obj_list()->fit_solid_fixture_blocks();
+
     for (auto opt_key : diff_keys) {
         // The filament lists are refreshed once after the loop, as these keys usually change together.
         if (opt_key == "filament_colour") {

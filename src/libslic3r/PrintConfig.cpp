@@ -455,6 +455,22 @@ std::array<double, 3> fixture_mount_grid(FixtureMountPattern pattern, double cus
     return { 0., 0., 0. };
 }
 
+Vec2d fixture_block_half_size(const Vec2d &part_half, double wall, double margin, const std::array<double, 3> &grid)
+{
+    Vec2d half = part_half + Vec2d::Constant(wall + margin);
+    const auto [pitch_x, pitch_y, hole] = grid;
+    if (pitch_x > 0. && pitch_y > 0. && hole > 0.) {
+        // The grid's holes sit half a pitch off the part's centre. The first column of them clear of the wall, half a
+        // pitch off the centre in Y, puts a hole in every quadrant. A tenth of a millimetre keeps a hole off the
+        // limits it is checked against.
+        const double edge = 0.5 * hole + FixtureHoleRoom + 0.1;
+        const double x    = (std::ceil((part_half.x() + wall + edge) / pitch_x - 0.5) + 0.5) * pitch_x;
+        half.x()          = std::max(half.x(), x + edge);
+        half.y()          = std::max(half.y(), 0.5 * pitch_y + edge);
+    }
+    return half;
+}
+
 //BBS
 static t_config_enum_values s_keys_map_PrintSequence {
     { "by layer",     int(PrintSequence::ByLayer) },

@@ -17,6 +17,7 @@
 #include "libslic3r/ExPolygon.hpp"
 #include "libslic3r/Layer.hpp"
 #include "libslic3r/Model.hpp"
+#include "libslic3r/Point.hpp"
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/TriangleMesh.hpp"
@@ -28,11 +29,11 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-// A solid fixture made of a `block` x `block` x 20 mm block and the part `pieces` make up, sliced at 0.2 mm with a 0.2 mm
-// clearance and the settings `items` add. The part is created before or after the block, which sets the volumes'
-// order.
+// A solid fixture made of a `block` x `block` x 20 mm block, or `block` x `block_y` mm, and the part `pieces` make up,
+// sliced at 0.2 mm with a 0.2 mm clearance and the settings `items` add. The part is created before or after the block,
+// which sets the volumes' order.
 Print &fixture(Print &print, Model &model, double block, std::vector<TriangleMesh> pieces,
-               std::initializer_list<ConfigBase::SetDeserializeItem> items, bool part_first = false)
+               std::initializer_list<ConfigBase::SetDeserializeItem> items, bool part_first = false, double block_y = 0.)
 {
     ModelObject *object = model.add_object();
     object->name        = "fixture.stl";
@@ -42,7 +43,7 @@ Print &fixture(Print &print, Model &model, double block, std::vector<TriangleMes
     };
     if (part_first)
         add_part();
-    object->add_volume(make_cube(block, block, 20.), ModelVolumeType::MODEL_PART, false);
+    object->add_volume(make_cube(block, block_y > 0. ? block_y : block, 20.), ModelVolumeType::MODEL_PART, false);
     if (! part_first)
         add_part();
     object->add_instance();
@@ -175,25 +176,30 @@ TEST_CASE("A solid fixture's cradle holds up an overhanging underside above the 
     CHECK_THAT(area_at(print, 8.5), WithinRel(10. * 10. - grown_square(4., 0.2), 0.02));
 }
 
-TEST_CASE("A solid fixture's base reaches out in tabs to the nearest mounting hole on each side", "[SolidFixture]")
+TEST_CASE("A solid fixture's base reaches out in tabs to a mounting hole in each quadrant on every pattern", "[SolidFixture]")
 {
-    // The M6 breadboard's 25 mm grid, centred on the 80 mm block, falls at 15, 40 and 65 mm each way; the 30 x 20 mm
-    // custom grid at 10, 40 and 70 mm by 0, 20, 40, 60 and 80 mm. Either way the nearest hole on each side of the part,
-    // clear of its wall, is 20 to 30 mm out, past the base's 7.2 mm flange: one tab and one hole on each side.
-    const char *pattern = GENERATE("breadboard_m6", "custom");
+    // A 10 mm cube in a block sized as "Create solid fixture" sizes it for the pattern: room for a grid hole in every
+    // quadrant round the part, however coarse the grid.
+    const char *pattern = GENERATE("breadboard_m6", "breadboard_1/4-20", "welding_system_16", "welding_system_22", "welding_system_28",
+                                   "welding_5/8", "pegboard_1/4", "pegboard_1/8", "tslot_20", "tslot_30", "tslot_40", "tslot_8020_10",
+                                   "tslot_8020_15", "custom");
     CAPTURE(pattern);
+    const double clearance = 0.2, wall = 2., margin = 5.;
+    DynamicPrintConfig settings;
+    settings.set_deserialize_strict({ { "solid_fixture_mount_pattern", pattern } });
+    const Vec2d half = fixture_block_half_size(Vec2d(5., 5.), clearance + wall, margin,
+                                               fixture_mount_grid(settings.opt_enum<FixtureMountPattern>("solid_fixture_mount_pattern"), 30., 20., 5.));
     Print print;
     Model model;
-    fixture(print, model, 80., centred_cube(),
-            { { "solid_fixture_base_thickness", 2 }, { "solid_fixture_margin", 5 }, { "solid_fixture_wall_thickness", 2 },
+    fixture(print, model, 2. * half.x(), { cube_at(10., 10., 10., half.x() - 5., half.y() - 5., 5.) },
+            { { "solid_fixture_base_thickness", 2 }, { "solid_fixture_margin", margin }, { "solid_fixture_wall_thickness", wall },
               { "solid_fixture_wall_height", 5 }, { "solid_fixture_mount_pattern", pattern }, { "solid_fixture_mount_pitch_x", 30 },
-              { "solid_fixture_mount_pitch_y", 20 }, { "solid_fixture_mount_hole", 5 } });
+              { "solid_fixture_mount_pitch_y", 20 }, { "solid_fixture_mount_hole", 5 } },
+            false, 2. * half.y());
 
     // The base is one piece, its four tabs joined to the flange, each with its hole.
     REQUIRE(layer_at(print, 1.).lslices.size() == 1);
     CHECK(holes_at(print, 1.) == 4);
-    // Most of the block is left empty.
-    CHECK(area_at(print, 1.) < 0.5 * 80. * 80.);
     // Above the base only the wall is printed, round the pocket: no mounting holes there.
     CHECK(holes_at(print, 8.) == 1);
 }

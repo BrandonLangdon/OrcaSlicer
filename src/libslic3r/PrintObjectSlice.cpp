@@ -23,6 +23,7 @@
 #include "Exception.hpp"
 #include "Flow.hpp"
 #include "I18N.hpp"
+#include "format.hpp"
 #include "Layer.hpp"
 #include "Model.hpp"
 #include "MultiMaterialSegmentation.hpp"
@@ -276,15 +277,15 @@ static std::vector<VolumeSlices> slice_volumes_inner(
 // Orca: shapes a solid fixture from its printed parts, the block, and its negative volumes, the part it holds. The
 // block only bounds the fixture; within it, measured up from its bottom:
 // - below the base thickness, a base: a flange of the fixture margin around the locating wall, and a tab out to the
-//   nearest mounting hole on each side of the part;
+//   nearest mounting hole in each quadrant round the part;
 // - above it, up to the wall height over the part's lowest point, a locating wall of the wall thickness around the
 //   part's outline;
 // - above that, a cradle under the part only.
 // Out of all of it is cut the pocket: on each layer, everything the part covers at or below the layer's height plus
 // the clearance, grown by the clearance, so the part lifts straight out. The mounting holes run through. The shape
 // is cut from every printed part whatever the volumes' order, and the negative volumes are left empty so that the
-// regions do not subtract them again. Without a negative volume the block is printed whole.
-static void shape_solid_fixture(std::vector<VolumeSlices> &volume_slices, const ModelVolumePtrs &model_volumes,
+// regions do not subtract them again. Without a negative volume the block is printed whole. Returns the tabs made.
+static size_t shape_solid_fixture(std::vector<VolumeSlices> &volume_slices, const ModelVolumePtrs &model_volumes,
                                 const std::vector<float> &zs, const PrintObjectConfig &config,
                                 const std::function<void()> &throw_on_cancel_callback)
 {
@@ -302,7 +303,7 @@ static void shape_solid_fixture(std::vector<VolumeSlices> &volume_slices, const 
         }
     const auto lowest = std::find_if(part.begin(), part.end(), [](const Polygons &p) { return ! p.empty(); });
     if (lowest == part.end())
-        return;
+        return 0;
     const double part_bottom = zs[lowest - part.begin()];
 
     // The pocket on each layer, which only ever grows going up; the part's outline is all of it.
@@ -338,18 +339,19 @@ static void shape_solid_fixture(std::vector<VolumeSlices> &volume_slices, const 
     const Polygons wall  = expand(outline, scaled<float>(clearance + wall_thickness));
     Polygons       base  = expand(outline, scaled<float>(clearance + wall_thickness + config.solid_fixture_margin.value));
 
-    // The mounting holes: the grid centred on the block, less any hole that would come within 2 mm of the block's edge
-    // or of the wall. A tab reaches out to the nearest of them on each side of the part.
+    // The mounting holes: the grid laid with the part in the middle of a cell, less any hole that would come within
+    // FixtureHoleRoom of the block's edge or of the wall. Only the holes' spacing has to match the workspace's. A tab
+    // reaches out to the nearest of them in each quadrant round the part.
     Polygons holes;
+    size_t   tabs = 0;
     const auto [pitch_x, pitch_y, diameter] = fixture_mount_grid(config.solid_fixture_mount_pattern.value, config.solid_fixture_mount_pitch_x.value,
                                                                  config.solid_fixture_mount_pitch_y.value, config.solid_fixture_mount_hole.value);
     if (pitch_x > 0. && pitch_y > 0. && diameter > 0. && ! block.empty()) {
-        constexpr double room   = 2.;
         // The pad around a tab's hole leaves room for a bolt head or a washer.
         const double      radius = 0.5 * diameter, pad = radius + 4.;
         const BoundingBox box    = get_extents(block);
-        const Point       centre = box.center(), middle = get_extents(outline).center();
-        const coord_t     step_x = scaled<coord_t>(pitch_x), step_y = scaled<coord_t>(pitch_y);
+        const Point       middle = get_extents(outline).center();
+        const double      step_x = scaled<double>(pitch_x), step_y = scaled<double>(pitch_y);
         auto circle = [](const Point &c, double r) {
             Polygon p;
             constexpr int segments = 64;
@@ -359,22 +361,25 @@ static void shape_solid_fixture(std::vector<VolumeSlices> &volume_slices, const 
             }
             return p;
         };
-        // The nearest hole on each side: right, left, back, front.
+        // The nearest hole in each quadrant.
         std::array<std::optional<Point>, 4> nearest;
-        for (coord_t y = centre.y() - ((centre.y() - box.min.y()) / step_y) * step_y; y <= box.max.y(); y += step_y)
-            for (coord_t x = centre.x() - ((centre.x() - box.min.x()) / step_x) * step_x; x <= box.max.x(); x += step_x) {
-                const Point    c(x, y);
-                const Polygons clear = expand(circle(c, radius), scaled<float>(room));
+        const double first_x = middle.x() + (std::floor((box.min.x() - middle.x()) / step_x - 0.5) + 0.5) * step_x;
+        const double first_y = middle.y() + (std::floor((box.min.y() - middle.y()) / step_y - 0.5) + 0.5) * step_y;
+        for (double y = first_y; y <= box.max.y(); y += step_y)
+            for (double x = first_x; x <= box.max.x(); x += step_x) {
+                const Point    c(coord_t(std::lround(x)), coord_t(std::lround(y)));
+                const Polygons clear = expand(circle(c, radius), scaled<float>(FixtureHoleRoom));
                 if (! diff(clear, block).empty() || ! intersection(clear, wall).empty())
                     continue;
                 holes.emplace_back(circle(c, radius));
-                const Vec2d d    = (c - middle).cast<double>();
-                const int   side = std::abs(d.x()) >= std::abs(d.y()) ? (d.x() > 0. ? 0 : 1) : (d.y() > 0. ? 2 : 3);
-                if (! nearest[side] || d.squaredNorm() < (*nearest[side] - middle).cast<double>().squaredNorm())
-                    nearest[side] = c;
+                const Vec2d d        = (c - middle).cast<double>();
+                const int   quadrant = (d.x() > 0. ? 1 : 0) + (d.y() > 0. ? 2 : 0);
+                if (! nearest[quadrant] || d.squaredNorm() < (*nearest[quadrant] - middle).cast<double>().squaredNorm())
+                    nearest[quadrant] = c;
             }
         for (const std::optional<Point> &c : nearest)
             if (c) {
+                ++ tabs;
                 // A pad round the hole and a bar of its width back to the part.
                 base.emplace_back(circle(*c, pad));
                 const Vec2d along = (middle - *c).cast<double>().normalized(), across(-along.y(), along.x());
@@ -397,6 +402,7 @@ static void shape_solid_fixture(std::vector<VolumeSlices> &volume_slices, const 
             if (const ModelVolume *mv = volume(vs.volume_id); mv != nullptr && mv->is_model_part() && i < vs.slices.size() && ! vs.slices[i].empty())
                 vs.slices[i] = diff_ex(intersection_ex(vs.slices[i], keep), cut);
     }
+    return tabs;
 }
 
 static inline VolumeSlices& volume_slices_find_by_id(std::vector<VolumeSlices> &volume_slices, const ObjectID id)
@@ -1504,8 +1510,13 @@ void PrintObject::slice_volumes()
                 if (auto it = std::find_if(objSliceByVolume.begin(), objSliceByVolume.end(), [model_volume](const VolumeSlices &vs) { return vs.volume_id == model_volume->id(); });
                     it != objSliceByVolume.end())
                     it->slices = painted_modifier_segmentation(*this, *model_volume, it->slices, throw_on_cancel_callback);
-        if (this->config().solid_fixture)
-            shape_solid_fixture(objSliceByVolume, this->model_object()->volumes, slice_zs, this->config(), throw_on_cancel_callback);
+        if (this->config().solid_fixture &&
+            shape_solid_fixture(objSliceByVolume, this->model_object()->volumes, slice_zs, this->config(), throw_on_cancel_callback) < 2 &&
+            this->config().solid_fixture_mount_pattern != FixtureMountPattern::None)
+            // TRN %1% is an object's name.
+            this->active_step_add_warning(PrintStateBase::WarningLevel::NON_CRITICAL,
+                format(_u8L("The solid fixture %1% has fewer than two mounting holes. Enlarge its block so the base can reach the grid."),
+                       this->model_object()->name));
     }
 
     //BBS: "model_part" volumes are grouded according to their connections

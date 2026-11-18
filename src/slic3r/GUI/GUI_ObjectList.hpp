@@ -451,6 +451,7 @@ public:
     void change_part_type();
 #endif
     bool can_create_solid_fixture() const;
+    void fit_solid_fixture_blocks(int obj_idx = -1);
     void create_solid_fixture();
 	// preserve_ps_subtype = true: when new_type is PRECISE_SEAM_CENTER, volumes that are
 	//   already Precise Seam keep their existing subtype (LEFT/RIGHT/etc.). Used by the

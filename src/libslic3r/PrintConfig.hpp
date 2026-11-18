@@ -337,6 +337,12 @@ enum class FixtureMountPattern {
 // values for FixtureMountPattern::Custom; all zero for no pattern. The diameters are clearance fits for the bolt or
 // pin the workspace takes.
 std::array<double, 3> fixture_mount_grid(FixtureMountPattern pattern, double custom_pitch_x, double custom_pitch_y, double custom_hole);
+// Orca: how far a solid fixture's mounting holes keep from the block's edge and from the locating wall, in millimetres.
+constexpr double FixtureHoleRoom = 2.;
+// Orca: the half-size along X and Y, from the centre of the part a solid fixture holds, of the block the fixture needs:
+// room for the base's margin past the locating wall, and with a mounting pattern for a hole in every quadrant round the
+// part. `part_half` is the part's half-size, `wall` its clearance and wall thickness together, `grid` the pattern's.
+Vec2d fixture_block_half_size(const Vec2d &part_half, double wall, double margin, const std::array<double, 3> &grid);
 
 enum class AdaptiveInfillGradient {
     Linear,
