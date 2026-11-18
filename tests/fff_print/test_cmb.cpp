@@ -115,16 +115,18 @@ TEST_CASE("A cube sliced for the F170 exports as a CMB job laid out like GrabCAD
     CHECK_THAT(back.header.bounding_box.size().z() * 25.4, WithinAbs(0.254 + 20. * 100. / 99.51 + 25.4 * 0.06, 0.3));
 }
 
-TEST_CASE("A cube sliced with each F370 process exports as a CMB job at its slice height", "[CMB]")
+TEST_CASE("A cube sliced with each F170 and F370 process exports as a CMB job at its slice height", "[CMB]")
 {
-    const auto [process, layer_height] = GENERATE(table<const char *, double>({
-        { "0.178mm Standard @Stratasys F370 T14-T14", 0.1778 },
-        { "0.254mm Standard @Stratasys F370 T14-T14", 0.254 },
-        { "0.330mm Standard @Stratasys F370 T14-T14", 0.3302 },
+    const auto [printer, process, machine, layer_height] = GENERATE(table<const char *, const char *, const char *, double>({
+        { "Stratasys F170 T14 model T14 support", "0.178mm Standard @Stratasys F170 T14-T14", "dorado1", 0.1778 },
+        { "Stratasys F170 T14 model T14 support", "0.330mm Standard @Stratasys F170 T14-T14", "dorado1", 0.3302 },
+        { "Stratasys F370 T14 model T14 support", "0.178mm Standard @Stratasys F370 T14-T14", "dorado3", 0.1778 },
+        { "Stratasys F370 T14 model T14 support", "0.254mm Standard @Stratasys F370 T14-T14", "dorado3", 0.254 },
+        { "Stratasys F370 T14 model T14 support", "0.330mm Standard @Stratasys F370 T14-T14", "dorado3", 0.3302 },
     }));
     CAPTURE(process);
     DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
-    apply_stratasys_preset(config, "machine", "Stratasys F370 T14 model T14 support");
+    apply_stratasys_preset(config, "machine", printer);
     apply_stratasys_preset(config, "process", process);
     Test::size_flush_to_nozzles(config);
     config.set_deserialize_strict({
@@ -137,9 +139,9 @@ TEST_CASE("A cube sliced with each F370 process exports as a CMB job at its slic
         // The purge tower needs complete material presets on both heads, as in the F170 test above.
         { "enable_prime_tower", "0" },
     });
-    // A 20 mm cube in the middle of the F370's 355 x 254 mm tray.
+    // A 20 mm cube near the middle of both printers' trays: the F170's 254 x 254 mm and the F370's 355 x 254 mm.
     TriangleMesh cube(its_make_cube(20., 20., 20.));
-    cube.translate(167.f, 117.f, 0.f);
+    cube.translate(117.f, 117.f, 0.f);
     Print print;
     Model model;
     std::vector<TriangleMesh> meshes { cube };
@@ -149,7 +151,7 @@ TEST_CASE("A cube sliced with each F370 process exports as a CMB job at its slic
 
     const CmbJob back = parse_cmb(serialize_cmb(cmb_job_from_toolpaths(toolpaths, cmb_export_settings(print.full_print_config(), "cube", 0))));
     REQUIRE(back.opaque.writable);
-    CHECK(back.header.machine == "dorado3");
+    CHECK(back.header.machine == machine);
     REQUIRE(back.layers.size() > 2);
     // Every job starts at 0.014 in; the layers above are a slice height apart, the support base first.
     CHECK_THAT(back.layers.front().min.z(), WithinAbs(0.014, 1e-3));

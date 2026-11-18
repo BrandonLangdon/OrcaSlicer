@@ -523,7 +523,9 @@ const CmbMachine CmbMachines[] = {
 
 // What GrabCAD Print writes for a model tip at a slice height: the last of the six floats after the shrink factors,
 // whose meaning is unknown, and the quality name. Each row comes from GrabCAD Print's jobs for the machine; a job at
-// any other tip and slice height is refused. The F370's 0.005 in jobs are left out as they lay no support base.
+// any other tip and slice height is refused. The F370's 0.005 in jobs are left out as they lay no support base. The
+// F170's 0.007 and 0.013 in rows are the F370's: the two printers' jobs match wherever both have been seen, and the
+// F170 holds parameter sets for both slice heights.
 struct CmbSliceStyle
 {
     const char *machine;
@@ -535,7 +537,9 @@ struct CmbSliceStyle
 };
 
 const CmbSliceStyle CmbSliceStyles[] = {
+    { "dorado1", "T14", 0.007, 0.105f, "normal" },
     { "dorado1", "T14", 0.010, 0.118f, "normal" },
+    { "dorado1", "T14", 0.013, 0.119f, "none" },
     { "dorado3", "T14", 0.007, 0.105f, "normal" },
     { "dorado3", "T14", 0.010, 0.118f, "normal" },
     { "dorado3", "T14", 0.013, 0.119f, "none" },

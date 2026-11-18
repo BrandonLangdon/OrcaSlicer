@@ -362,9 +362,9 @@ TEST_CASE("Toolpaths a Stratasys printer would not take are refused", "[CMB]")
     wide.moves.back().width = 2.5f;
     CHECK_THROWS_AS(cmb_job_from_toolpaths(wide, f170_settings()), Slic3r::RuntimeError);
 
-    // A tip and slice height GrabCAD Print's jobs for the machine have not shown: the F170 at 0.007 in, and the F370
-    // at 0.005 in, where GrabCAD Print lays no support base.
-    for (auto [machine, layer] : { std::pair { "dorado1", 0.1778f }, { "dorado3", 0.127f } }) {
+    // A slice height GrabCAD Print's jobs for the machine have not shown with a support base: 0.005 in, where it lays
+    // the part straight on the sheet.
+    for (auto [machine, layer] : { std::pair { "dorado1", 0.127f }, { "dorado3", 0.127f } }) {
         GCodeProcessorResult other;
         square_toolpaths(other, 0.3556f, layer);
         CmbExportSettings settings = f170_settings();
