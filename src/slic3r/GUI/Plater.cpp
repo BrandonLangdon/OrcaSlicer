@@ -165,6 +165,9 @@
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/LifecycleEvents.hpp"
 #include "libslic3r/Format/STL.hpp"
+#include "libslic3r/ExPolygon.hpp"
+#include "libslic3r/Layer.hpp"
+#include "libslic3r/SlicesToTriangleMesh.hpp"
 #include "libslic3r/Format/DRC.hpp"
 #include "libslic3r/Format/STEP.hpp"
 #include "libslic3r/Format/AMF.hpp"
@@ -20535,9 +20538,62 @@ TriangleMesh Plater::combine_mesh_fff(const ModelObject& mo, int instance_id, st
 
 // BBS export with/without boolean, however, stil merge mesh
 #define EXPORT_WITH_BOOLEAN 0
+
+// Orca: whether `mo` is a solid fixture, by its own settings or the edited print preset's.
+static bool is_solid_fixture(const ModelObject &mo)
+{
+    return mo.config.has("solid_fixture") ? mo.config.get().opt_bool("solid_fixture") :
+                                            wxGetApp().preset_bundle->prints.get_edited_preset().config.opt_bool("solid_fixture");
+}
+
+// Orca: the sliced print object of `mo`, or none when its slices are not up to date.
+static const PrintObject *sliced_print_object(const Print &print, const ModelObject &mo)
+{
+    for (const PrintObject *po : print.objects())
+        if (po->model_object()->id() == mo.id())
+            return po->is_step_done(posSlice) && ! po->layers().empty() ? po : nullptr;
+    return nullptr;
+}
+
+// Orca: a solid fixture as it prints, which only slicing works out: its sliced layers stacked into a mesh, stepped at
+// the layer heights, and placed on the bed as the toolpaths are, for the instance `instance_id` or for every instance.
+static TriangleMesh solid_fixture_mesh(const PrintObject &po, const ModelObject &mo, int instance_id)
+{
+    std::vector<ExPolygons> slices;
+    std::vector<float>      tops;
+    for (const Layer *layer : po.layers()) {
+        slices.emplace_back(layer->lslices);
+        tops.emplace_back(float(layer->print_z));
+    }
+    const TriangleMesh layers(slices_to_mesh(slices, po.layers().front()->bottom_z(), tops));
+    TriangleMesh       mesh;
+    for (const PrintInstance &instance : po.instances())
+        if (instance_id < 0 || (instance_id < int(mo.instances.size()) && instance.model_instance->id() == mo.instances[instance_id]->id())) {
+            TriangleMesh placed = layers;
+            placed.translate(float(unscale<double>(instance.shift.x())), float(unscale<double>(instance.shift.y())), 0.f);
+            mesh.merge(placed);
+        }
+    return mesh;
+}
+
 void Plater::export_stl(bool extended, bool selection_only, bool multi_stls, FileType file_type)
 {
     if (p->model.objects.empty()) { return; }
+
+    // Orca: a solid fixture exports as it prints, so it has to be sliced first.
+    if (p->printer_technology == ptFFF) {
+        const Selection::ObjectIdxsToInstanceIdxsMap &selected = p->get_selection().get_content();
+        for (size_t idx = 0; idx < p->model.objects.size(); ++ idx) {
+            const ModelObject &mo = *p->model.objects[idx];
+            if ((! selection_only || selected.count(int(idx)) > 0) && is_solid_fixture(mo) &&
+                sliced_print_object(p->fff_print, mo) == nullptr) {
+                // TRN %1% is an object's name.
+                show_error(this, format_wxstr(_L("Slice the plate before exporting the solid fixture \"%1%\", so that it exports as it prints."),
+                                              mo.name));
+                return;
+            }
+        }
+    }
 
     int quality = 0;
 
@@ -20705,6 +20761,12 @@ void Plater::export_stl(bool extended, bool selection_only, bool multi_stls, Fil
 #endif
     else
         mesh_to_export = mesh_to_export_sla;
+    // Orca: a solid fixture exports its sliced shape, not its block less the part.
+    if (p->printer_technology == ptFFF)
+        mesh_to_export = [this, mesh_of_model = mesh_to_export](const ModelObject &mo, int instance_id) {
+            const PrintObject *po = is_solid_fixture(mo) ? sliced_print_object(p->fff_print, mo) : nullptr;
+            return po != nullptr ? solid_fixture_mesh(*po, mo, instance_id) : mesh_of_model(mo, instance_id);
+        };
 
     auto get_save_file = [file_type](std::string const & dir, std::string const & name) {
         std::string ext = "";

@@ -7,6 +7,9 @@
 
 namespace Slic3r {
 
+// A mesh stacking `slices`, layer i reaching from the layer below's top, or `zmin` for the first, up to `grid[i]`.
+indexed_triangle_set slices_to_mesh(const std::vector<ExPolygons> &slices, double zmin, const std::vector<float> &grid);
+
 void slices_to_mesh(indexed_triangle_set &         mesh,
                     const std::vector<ExPolygons> &slices,
                     double                         zmin,

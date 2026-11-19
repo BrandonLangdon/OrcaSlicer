@@ -19,6 +19,7 @@
 #include "libslic3r/Model.hpp"
 #include "libslic3r/Point.hpp"
 #include "libslic3r/Print.hpp"
+#include "libslic3r/SlicesToTriangleMesh.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/libslic3r.h"
@@ -210,4 +211,29 @@ TEST_CASE("A solid fixture has no mounting holes unless a pattern is chosen", "[
     Model model;
     fixture(print, model, 80., centred_cube(), { { "solid_fixture_mount_pattern", "none" } });
     CHECK(holes_at(print, 1.) == 0);
+}
+
+TEST_CASE("A sliced solid fixture stacks into a closed mesh of the volume it prints", "[SolidFixture]")
+{
+    // The stepped part on a base, wall and cradle, with mounting tabs: every feature the fixture exports with.
+    Print print;
+    Model model;
+    fixture(print, model, 80., stepped_part(),
+            { { "solid_fixture_base_thickness", 2 }, { "solid_fixture_wall_height", 3 }, { "solid_fixture_mount_pattern", "breadboard_m6" } });
+    const PrintObject &object = *print.objects().front();
+
+    std::vector<ExPolygons> slices;
+    std::vector<float>      tops;
+    double                  printed = 0.;
+    for (const Layer *layer : object.layers()) {
+        slices.emplace_back(layer->lslices);
+        tops.emplace_back(float(layer->print_z));
+        for (const ExPolygon &expolygon : layer->lslices)
+            printed += expolygon.area() * SCALING_FACTOR * SCALING_FACTOR * layer->height;
+    }
+    const indexed_triangle_set mesh = slices_to_mesh(slices, object.layers().front()->bottom_z(), tops);
+
+    // A closed mesh, which a slicer reads back as a solid, holding what the layers print.
+    CHECK(its_num_open_edges(mesh) == 0);
+    CHECK_THAT(double(its_volume(mesh)), WithinRel(printed, 0.001));
 }
