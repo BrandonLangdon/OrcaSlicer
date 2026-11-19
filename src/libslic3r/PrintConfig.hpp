@@ -23,6 +23,7 @@
 #include "Polygon.hpp"
 #include <boost/container_hash/hash.hpp>
 #include <algorithm>
+#include <array>
 #include <boost/preprocessor/facilities/empty.hpp>
 #include <boost/preprocessor/punctuation/comma_if.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
@@ -313,6 +314,36 @@ enum class AdaptiveInfillMode {
 };
 
 // Orca: how the adaptive infill density changes from the object surface to its deepest point.
+// Orca: the hole grid a solid fixture is bolted or pinned to its workspace with.
+enum class FixtureMountPattern {
+    None,
+    BreadboardM6,
+    BreadboardQuarter20,
+    WeldingSystem16,
+    WeldingSystem22,
+    WeldingSystem28,
+    WeldingFiveEighths,
+    PegboardQuarter,
+    PegboardEighth,
+    TSlot20,
+    TSlot30,
+    TSlot40,
+    TSlot8020Series10,
+    TSlot8020Series15,
+    Custom,
+};
+
+// Orca: the pitch along X, the pitch along Y and the hole diameter of a mounting pattern, in millimetres, the custom
+// values for FixtureMountPattern::Custom; all zero for no pattern. The diameters are clearance fits for the bolt or
+// pin the workspace takes.
+std::array<double, 3> fixture_mount_grid(FixtureMountPattern pattern, double custom_pitch_x, double custom_pitch_y, double custom_hole);
+// Orca: how far a solid fixture's mounting holes keep from the block's edge and from the locating wall, in millimetres.
+constexpr double FixtureHoleRoom = 2.;
+// Orca: the half-size along X and Y, from the centre of the part a solid fixture holds, of the block the fixture needs:
+// room for the base's margin past the locating wall, and with a mounting pattern for a hole in every quadrant round the
+// part. `part_half` is the part's half-size, `wall` its clearance and wall thickness together, `grid` the pattern's.
+Vec2d fixture_block_half_size(const Vec2d &part_half, double wall, double margin, const std::array<double, 3> &grid);
+
 enum class AdaptiveInfillGradient {
     Linear,
     Quadratic,
@@ -848,6 +879,7 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(ArcFittingMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(SurfaceFillOrder)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(AdaptiveInfillMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(AdaptiveInfillGradient)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(FixtureMountPattern)
 
 #undef CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS
 
@@ -1335,6 +1367,17 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                support_critical_regions_only))
     ((ConfigOptionBool,                support_remove_small_overhang))
     ((ConfigOptionFloat,               support_top_z_distance))
+    // Orca: solid fixture, a block with a pocket the object's negative volumes cut into it.
+    ((ConfigOptionBool,                solid_fixture))
+    ((ConfigOptionFloat,               solid_fixture_clearance))
+    ((ConfigOptionFloat,               solid_fixture_base_thickness))
+    ((ConfigOptionFloat,               solid_fixture_margin))
+    ((ConfigOptionFloat,               solid_fixture_wall_thickness))
+    ((ConfigOptionFloat,               solid_fixture_wall_height))
+    ((ConfigOptionEnum<FixtureMountPattern>, solid_fixture_mount_pattern))
+    ((ConfigOptionFloat,               solid_fixture_mount_pitch_x))
+    ((ConfigOptionFloat,               solid_fixture_mount_pitch_y))
+    ((ConfigOptionFloat,               solid_fixture_mount_hole))
     ((ConfigOptionFloat,               support_bottom_z_distance))
     ((ConfigOptionInt,                 enforce_support_layers))
     ((ConfigOptionInt,                 support_filament))

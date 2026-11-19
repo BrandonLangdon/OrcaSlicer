@@ -1577,7 +1577,17 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "interlocking_beam_layer_count"
             || opt_key == "interlocking_depth"
             || opt_key == "interlocking_boundary_avoidance"
-            || opt_key == "interlocking_beam_width") {
+            || opt_key == "interlocking_beam_width"
+            || opt_key == "solid_fixture"
+            || opt_key == "solid_fixture_clearance"
+            || opt_key == "solid_fixture_base_thickness"
+            || opt_key == "solid_fixture_margin"
+            || opt_key == "solid_fixture_wall_thickness"
+            || opt_key == "solid_fixture_wall_height"
+            || opt_key == "solid_fixture_mount_pattern"
+            || opt_key == "solid_fixture_mount_pitch_x"
+            || opt_key == "solid_fixture_mount_pitch_y"
+            || opt_key == "solid_fixture_mount_hole") {
             steps.emplace_back(posSlice);
 		} else if (
                opt_key == "elefant_foot_compensation"

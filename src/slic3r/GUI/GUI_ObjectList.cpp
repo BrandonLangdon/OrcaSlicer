@@ -999,6 +999,9 @@ void ObjectList::object_config_options_changed(const ObjectVolumeID& ov_id)
         else {
             m_objects_model->DeleteSettings(obj_item);
         }
+        // Orca: a solid fixture's settings may need a larger block.
+        if (const auto it = std::find(objects.begin(), objects.end(), mo); it != objects.end())
+            fit_solid_fixture_blocks(int(it - objects.begin()));
     }
 }
 
@@ -5881,6 +5884,132 @@ ModelVolume* ObjectList::get_selected_model_volume()
         return nullptr;
 
     return (*m_objects)[obj_idx]->volumes[vol_idx];
+}
+
+// Orca: the half-size along X and Y, from the centre of `part`, of the block a solid fixture `object` needs, from its own
+// settings or the edited print preset's.
+static Vec2d solid_fixture_block_half_size(const ModelObject &object, const BoundingBoxf3 &part)
+{
+    const DynamicPrintConfig &print_config = wxGetApp().preset_bundle->prints.get_edited_preset().config;
+    auto setting = [&object, &print_config](const char *key) {
+        return object.config.has(key) ? object.config.get().opt_float(key) : print_config.opt_float(key);
+    };
+    const auto *pattern = object.config.has("solid_fixture_mount_pattern") ?
+                              object.config.get().option<ConfigOptionEnum<FixtureMountPattern>>("solid_fixture_mount_pattern") :
+                              print_config.option<ConfigOptionEnum<FixtureMountPattern>>("solid_fixture_mount_pattern");
+    return fixture_block_half_size(0.5 * part.size().head<2>(), setting("solid_fixture_clearance") + setting("solid_fixture_wall_thickness"),
+                                   setting("solid_fixture_margin"),
+                                   fixture_mount_grid(pattern ? pattern->value : FixtureMountPattern::None, setting("solid_fixture_mount_pitch_x"),
+                                                      setting("solid_fixture_mount_pitch_y"), setting("solid_fixture_mount_hole")));
+}
+
+// Orca: grows the block of each solid fixture, or only of the object `obj_idx`, to the size its settings need, so the
+// base's margin and a mounting hole in every quadrant fit in it. The block only bounds the fixture, so a block the
+// user made larger is left as it is. A fixture's block is its only printed part.
+void ObjectList::fit_solid_fixture_blocks(int obj_idx)
+{
+    const DynamicPrintConfig &print_config = wxGetApp().preset_bundle->prints.get_edited_preset().config;
+    for (int idx = 0; idx < int(m_objects->size()); ++ idx) {
+        if (obj_idx >= 0 && idx != obj_idx)
+            continue;
+        ModelObject &object  = *(*m_objects)[idx];
+        const bool   fixture = object.config.has("solid_fixture") ? object.config.get().opt_bool("solid_fixture") : print_config.opt_bool("solid_fixture");
+        ModelVolume *block   = nullptr;
+        size_t        blocks = 0;
+        BoundingBoxf3 part;
+        for (ModelVolume *volume : object.volumes)
+            if (volume->is_model_part()) {
+                block = volume;
+                ++ blocks;
+            } else if (volume->is_negative_volume())
+                part.merge(volume->mesh().transformed_bounding_box(volume->get_matrix()));
+        if (! fixture || blocks != 1 || ! part.defined)
+            continue;
+        const Vec2d   half    = solid_fixture_block_half_size(object, part);
+        const Vec3d   centre  = part.center();
+        BoundingBoxf3 current = block->mesh().transformed_bounding_box(block->get_matrix());
+        BoundingBoxf3 needed  = current;
+        needed.merge(Vec3d(centre.x() - half.x(), centre.y() - half.y(), current.min.z()));
+        needed.merge(Vec3d(centre.x() + half.x(), centre.y() + half.y(), current.max.z()));
+        if (needed.min.isApprox(current.min, 1e-3) && needed.max.isApprox(current.max, 1e-3))
+            continue;
+        const Vec3d  size = needed.size();
+        TriangleMesh mesh = make_cube(size.x(), size.y(), size.z());
+        mesh.translate(Vec3f(-0.5f * size.cast<float>()));
+        block->set_mesh(std::move(mesh));
+        Geometry::Transformation placement;
+        placement.set_offset(needed.center());
+        block->set_transformation(placement);
+        block->calculate_convex_hull();
+        block->invalidate_convex_hull_2d();
+        block->set_new_unique_id();
+        object.invalidate_bounding_box();
+        object.ensure_on_bed();
+        wxGetApp().plater()->changed_mesh(idx);
+    }
+}
+
+// Orca: a solid fixture is made from a single object of printed parts, with one instance, that is not one already.
+bool ObjectList::can_create_solid_fixture() const
+{
+    const int obj_idx = get_selected_obj_idx();
+    if (obj_idx < 0 || obj_idx >= int(m_objects->size()))
+        return false;
+    const ModelObject &object = *(*m_objects)[obj_idx];
+    if (object.instances.size() != 1 || (object.config.has("solid_fixture") && object.config.get().opt_bool("solid_fixture")))
+        return false;
+    return std::any_of(object.volumes.begin(), object.volumes.end(), [](const ModelVolume *v) { return v->is_model_part(); });
+}
+
+// Orca: turns the selected object into a solid fixture. Its printed parts become negative volumes, which cut the
+// pocket, inside a new block reaching the base thickness below them and up to their top. The block bounds the
+// fixture's base, so it is sized for the base's margin past the locating wall and for a mounting hole in every
+// quadrant round the part. The object's own solid_fixture setting switches the fixture on.
+void ObjectList::create_solid_fixture()
+{
+    if (! can_create_solid_fixture())
+        return;
+    const int    obj_idx = get_selected_obj_idx();
+    ModelObject &object  = *(*m_objects)[obj_idx];
+
+    const DynamicPrintConfig &print_config = wxGetApp().preset_bundle->prints.get_edited_preset().config;
+    auto setting = [&object, &print_config](const char *key) {
+        return object.config.has(key) ? object.config.get().opt_float(key) : print_config.opt_float(key);
+    };
+    const double base = setting("solid_fixture_base_thickness");
+
+    take_snapshot(_u8L("Create solid fixture"));
+    // The block is laid out square to the bed, so the instance's rotation and scale go into the parts first.
+    apply_object_instance_transfrom_to_all_volumes(&object);
+
+    BoundingBoxf3 parts;
+    for (ModelVolume *volume : object.volumes)
+        if (volume->is_model_part()) {
+            parts.merge(volume->mesh().transformed_bounding_box(volume->get_matrix()));
+            volume->set_type(ModelVolumeType::NEGATIVE_VOLUME);
+        }
+    const Vec2d  half   = solid_fixture_block_half_size(object, parts);
+    const Vec3d  centre = parts.center();
+    TriangleMesh block  = make_cube(2. * half.x(), 2. * half.y(), parts.size().z() + base);
+    block.translate(Vec3f(float(centre.x() - half.x()), float(centre.y() - half.y()), float(parts.min.z() - base)));
+    ModelVolume *block_volume = object.add_volume(std::move(block), ModelVolumeType::MODEL_PART);
+    block_volume->name        = into_u8(_L("Fixture block"));
+    block_volume->config.set_key_value("extruder", new ConfigOptionInt(object.config.has("extruder") ? object.config.opt_int("extruder") : 0));
+    block_volume->source.is_from_builtin_objects = true;
+    object.config.set_key_value("solid_fixture", new ConfigOptionBool(true));
+
+    // The block reaches below the parts, so the object drops by the base thickness to stand on the bed.
+    object.ensure_on_bed();
+    Slic3r::save_object_mesh(object);
+
+    select_item([this, obj_idx, block_volume]() {
+        wxDataViewItemArray items = reorder_volumes_and_get_selection(obj_idx, [block_volume](const ModelVolume *v) { return v == block_volume; });
+        return items.IsEmpty() ? wxDataViewItem(nullptr) : items.front();
+    });
+    add_settings_item(m_objects_model->GetItemById(obj_idx), &object.config.get());
+    wxGetApp().plater()->get_view3D_canvas3D()->update_instance_printable_state_for_object(size_t(obj_idx));
+    selection_changed();
+    notify_instance_updated(obj_idx);
 }
 
 // ORCA: kept as dead code (not called by any active path). Preserved in #if 0

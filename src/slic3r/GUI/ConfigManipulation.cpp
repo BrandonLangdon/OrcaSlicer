@@ -851,6 +851,10 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     toggle_line("adaptive_infill_interior_density", have_adaptive_infill, -1, adaptive_density_reason);
     toggle_line("adaptive_infill_gradient", have_adaptive_infill, -1, adaptive_density_reason);
 
+    const bool have_custom_mount = config->opt_enum<FixtureMountPattern>("solid_fixture_mount_pattern") == FixtureMountPattern::Custom;
+    for (const char *key : { "solid_fixture_mount_pitch_x", "solid_fixture_mount_pitch_y", "solid_fixture_mount_hole" })
+        toggle_line(key, have_custom_mount);
+
     bool have_gradable_infill = have_infill && config->option<ConfigOptionPercent>("sparse_infill_density")->value < 100 &&
                                 is_gradable_infill_pattern(pattern);
     toggle_line("sparse_infill_gradient_height", have_gradable_infill);
